@@ -8,6 +8,7 @@ This provides a seamless integration between Entity Framework Core and DuckDB, a
 - **Automatic SQL Translation**: Converts EF Core generated SQL to DuckDB-compatible SQL
 - **Full EF Core Support**: Works with LINQ queries, navigation properties, and all EF Core features
 - **Performance**: Leverages DuckDB's columnar storage for fast analytical queries on Parquet files
+- **Developer-Friendly API**: The extension replaces fragile, manual setups with a clean, fluent API. This reduces code complexity, improves maintainability, and accelerates development.
 
 ## Installation
 
@@ -80,13 +81,8 @@ var options = new DbContextOptionsBuilder<MyDbContext>()
 
 ## Migration from Previous Implementation
 
-### Before (Manual Setup)
-```csharp
-DbContextOptionsBuilder<MyDbContext> contextBuilder = new DbContextOptionsBuilder<MyDbContext>();
-contextBuilder.UseSqlite(string.Empty);
-contextBuilder.AddInterceptors(_interceptor); // Manual interceptor
-contextBuilder.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
-```
+### Before (Manual Setup)  
+*Manual DbConnection management, custom interceptors, and scattered configuration.*
 
 ### After (Using UseDuckDb)
 ```csharp
