@@ -29,14 +29,13 @@ This software incorporates components from the following third-party libraries:
 ### Microsoft Entity Framework Core
 - **Microsoft.EntityFrameworkCore** - MIT License
 - **Microsoft.EntityFrameworkCore.Sqlite** - MIT License  
-- **Microsoft.Data.Sqlite** - MIT License
 
 Source: https://github.com/dotnet/efcore
 
 Copyright (c) .NET Foundation and Contributors
 
 ### DuckDB.NET
-- **DuckDB.NET** - MIT License
+- **DuckDB.NET.Data.Full** - MIT License
 
 Source: https://github.com/DuckDB/duckdb-dotnet
 

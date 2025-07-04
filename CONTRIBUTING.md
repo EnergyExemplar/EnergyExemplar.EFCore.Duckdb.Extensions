@@ -35,7 +35,7 @@ dotnet --version   # should print 8.x
 
 • **Git** — any recent version.
 
-• **DuckDB.NET** and other NuGet packages are restored automatically during build; no system-wide DuckDB install is required because `DuckDB.NET.Data.Full` ships the native binaries.
+• **DuckDB.NET.Data.Full** (along with EF Core) is restored automatically during build; no system-wide DuckDB install is required because the 'Full' package ships native binaries.
 
 ---
 
@@ -87,7 +87,7 @@ These conventions make the change-log & semantic versioning much easier to autom
 | Nullable | The project has **nullable reference types** enabled – avoid `!` suppression unless absolutely necessary. |
 | Public API | Public surface changes must be accompanied by XML docs and a line in *README.md* summarising the feature. |
 | Performance | DuckDB is columnar – favour set-based operations and avoid per-row loops in critical paths. |
-| Dependencies | Stick to the **lowest** package versions that still provide the required features (currently EF Core 8.0.6 & DuckDB.NET.Data.Full 0.10.1). |
+| Dependencies | Stick to the **lowest** package versions that still provide the required features (currently EF Core 8.0.6 & DuckDB.NET.Data.Full 1.2.1). |
 
 ---
 

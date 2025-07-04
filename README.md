@@ -208,5 +208,4 @@ This project depends on the following third-party libraries:
 
 - **Microsoft.EntityFrameworkCore** - Licensed under the MIT License. See [Entity Framework Core repository](https://github.com/dotnet/efcore) for details.
 - **Microsoft.EntityFrameworkCore.Sqlite** - Licensed under the MIT License. See [Entity Framework Core repository](https://github.com/dotnet/efcore) for details.
-- **Microsoft.Data.Sqlite** - Licensed under the MIT License. See [Entity Framework Core repository](https://github.com/dotnet/efcore) for details.
 - **DuckDB.NET.Data.Full** - Licensed under the MIT License. See [DuckDB.NET repository](https://github.com/DuckDB/duckdb-dotnet) for details.
