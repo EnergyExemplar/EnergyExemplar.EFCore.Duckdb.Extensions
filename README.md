@@ -27,9 +27,9 @@ DuckDB's columnar storage and vectorized execution engine provide substantial pe
 
 Ensure you have the necessary NuGet packages:
 ```xml
-<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
-<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
-<PackageReference Include="DuckDB.NET" Version="1.0.2" />
+<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.6" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.6" />
+<PackageReference Include="DuckDB.NET.Data.Full" Version="1.2.1" />
 ```
 
 ## Basic Usage
@@ -209,4 +209,4 @@ This project depends on the following third-party libraries:
 - **Microsoft.EntityFrameworkCore** - Licensed under the MIT License. See [Entity Framework Core repository](https://github.com/dotnet/efcore) for details.
 - **Microsoft.EntityFrameworkCore.Sqlite** - Licensed under the MIT License. See [Entity Framework Core repository](https://github.com/dotnet/efcore) for details.
 - **Microsoft.Data.Sqlite** - Licensed under the MIT License. See [Entity Framework Core repository](https://github.com/dotnet/efcore) for details.
-- **DuckDB.NET** - Licensed under the MIT License. See [DuckDB.NET repository](https://github.com/DuckDB/duckdb-dotnet) for details.
+- **DuckDB.NET.Data.Full** - Licensed under the MIT License. See [DuckDB.NET repository](https://github.com/DuckDB/duckdb-dotnet) for details.
