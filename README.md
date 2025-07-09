@@ -7,16 +7,29 @@ This provides a seamless integration between Entity Framework Core and DuckDB, a
 - **Simple API**: Just use `UseDuckDb()` similar to `UseSqlite()` or `UseSqlServer()`
 - **Automatic SQL Translation**: Converts EF Core generated SQL to DuckDB-compatible SQL
 - **Full EF Core Support**: Works with LINQ queries, navigation properties, and all EF Core features
-- **Performance**: Leverages DuckDB's columnar storage for fast analytical queries on Parquet files
+- **Performance**: Leverages DuckDB's columnar storage for fast analytical queries on Parquet files with significant performance improvements over SQLite
 - **Developer-Friendly API**: The extension replaces fragile, manual setups with a clean, fluent API. This reduces code complexity, improves maintainability, and accelerates development.
+
+## Performance
+
+The performance improvements are significant when using DuckDB over SQLite for analytical queries:
+
+| Database | OData Query Performance |
+|----------|-------------------------|
+| **SQLite** | 7.61s - 8.83s |
+| **DuckDB** | 800ms - 1s |
+
+**Performance Gain: ~8-10x faster** 🚀
+
+DuckDB's columnar storage and vectorized execution engine provide substantial performance benefits for analytical workloads, making it an excellent choice for data analysis and reporting scenarios.
 
 ## Installation
 
 Ensure you have the necessary NuGet packages:
 ```xml
-<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
-<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
-<PackageReference Include="DuckDB.NET" Version="1.0.2" />
+<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.6" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.6" />
+<PackageReference Include="DuckDB.NET.Data.Full" Version="1.2.1" />
 ```
 
 ## Basic Usage
@@ -183,4 +196,16 @@ services.AddDbContext<MyParquetContext>(options =>
 
 - The implementation uses SQLite as the base provider but intercepts and translates all SQL to DuckDB
 - Query tracking is disabled by default for better performance (can be overridden via `NoTracking = false`)
-- All DuckDB dependencies are automatically registered when using the extensions 
+- All DuckDB dependencies are automatically registered when using the extensions
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Third-Party Licenses
+
+This project depends on the following third-party libraries:
+
+- **Microsoft.EntityFrameworkCore** - Licensed under the MIT License. See [Entity Framework Core repository](https://github.com/dotnet/efcore) for details.
+- **Microsoft.EntityFrameworkCore.Sqlite** - Licensed under the MIT License. See [Entity Framework Core repository](https://github.com/dotnet/efcore) for details.
+- **DuckDB.NET.Data.Full** - Licensed under the MIT License. See [DuckDB.NET repository](https://github.com/DuckDB/duckdb-dotnet) for details.
