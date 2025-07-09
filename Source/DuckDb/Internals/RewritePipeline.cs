@@ -5,12 +5,12 @@ namespace EnergyExemplar.Extensions.DuckDb.Internals
     /// into DuckDB-compatible SQL. Processes SQL strings through a series of transformations,
     /// applying each rule's condition and transformation logic in sequence.
     /// </summary>
-    public sealed class RewritePipeline
+    internal sealed class RewritePipeline
     {
         private readonly IReadOnlyList<SqlRewriteRule> _rules;
-        public RewritePipeline(IEnumerable<SqlRewriteRule> rules) => _rules = rules.ToList();
+        internal RewritePipeline(IEnumerable<SqlRewriteRule> rules) => _rules = rules.ToList();
 
-        public string Rewrite(string sql)
+        internal string Rewrite(string sql)
         {
             foreach (var r in _rules)
                 if (r.ShouldRun(sql))
@@ -21,7 +21,7 @@ namespace EnergyExemplar.Extensions.DuckDb.Internals
         /// <summary>
         /// Default pipeline with commonly-needed SQLite → DuckDB translations.
         /// </summary>
-        public static RewritePipeline Default { get; } = new RewritePipeline(new[]
+        internal static RewritePipeline Default { get; } = new RewritePipeline(new[]
         {
             DuckSqlRules.JsonEachToUnnest,
             DuckSqlRules.LikeEscapeStrip,

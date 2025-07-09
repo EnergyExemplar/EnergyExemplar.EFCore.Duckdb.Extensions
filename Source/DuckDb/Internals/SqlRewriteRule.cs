@@ -5,7 +5,7 @@ namespace EnergyExemplar.Extensions.DuckDb.Internals
     /// Each rule consists of a condition function and a transformation function that are applied sequentially
     /// in a pipeline to translate vendor-specific SQL into DuckDB-compatible SQL.
     /// </summary>
-    public sealed record SqlRewriteRule(
+    internal sealed record SqlRewriteRule(
         string Name,
         Func<string, bool> ShouldRun,
         Func<string, string> Apply);
