@@ -179,32 +179,18 @@ jobs:
         name: release-package-${{ steps.get_version.outputs.new_version }}
         path: ./artifacts/
         
-    - name: Create GitHub Release
-      uses: actions/create-release@v1
+    - name: Create GitHub Release with Artifacts
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.get_version.outputs.new_version }}
-        release_name: Release ${{ steps.get_version.outputs.new_version }}
-        body: |
-          ## Release ${{ steps.get_version.outputs.new_version }}
-          
-          ### Changes
-          - Automated release from commit ${{ github.sha }}
-          
-          ### Download
-          The release package is available as a zip file in the artifacts.
-        draft: false
-        prerelease: false
+      run: |
+        gh release create ${{ steps.get_version.outputs.new_version }} \
+          --title "Release ${{ steps.get_version.outputs.new_version }}" \
+          --notes "## Release ${{ steps.get_version.outputs.new_version }}
         
-    - name: Upload release asset
-      uses: actions/upload-release-asset@v1
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./artifacts/EnergyExemplar.EFCore.Duckdb.Extensions-${{ steps.get_version.outputs.new_version }}.zip
-        asset_name: EnergyExemplar.EFCore.Duckdb.Extensions-${{ steps.get_version.outputs.new_version }}.zip
-        asset_content_type: application/zip
+        ### Changes
+        - Automated release from commit ${{ github.sha }}
+        
+        ### Download
+        The release package is available as a zip file below." \
+          ./artifacts/EnergyExemplar.EFCore.Duckdb.Extensions-${{ steps.get_version.outputs.new_version }}.zip
