@@ -1,0 +1,119 @@
+name: "Build"
+
+on:
+  workflow_dispatch:
+
+  push:
+    paths-ignore:
+      - '**.md'
+      - '**/NuGet.yml'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      
+#  schedule:    
+#      - cron: "15 */12 * * *"
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-14]
+        arch: ['amd64']
+      fail-fast: false
+
+    name: Build library (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: Set Build Branch
+      if: github.event_name == 'schedule'
+      run: |
+        echo "BuildBranch=nightly-builds" >> "$GITHUB_ENV"
+        echo "BuildBranch=nightly-builds" >> $env:GITHUB_ENV
+        
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET Core SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj
+
+    - name: Build
+      run: dotnet build Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj --configuration Release --no-restore
+
+    - name: Pack
+      if: matrix.os == 'ubuntu-latest' && github.event_name != 'pull_request'
+      run: |
+        dotnet pack Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj --configuration Release --no-build
+
+    - name: Run tests
+      env:
+        CoverletOutputFormat: lcov
+      run: dotnet test Tests/Tests.csproj --configuration Release --verbosity normal --logger GitHubActions /p:CollectCoverage=true /p:CoverletOutputFormat=lcov
+
+    - name: Upload coverage reports to Coveralls Parallel
+      uses: coverallsapp/github-action@v2
+      if: github.event_name != 'schedule'
+      with:
+        github-token: ${{ secrets.github_token }}
+        flag-name: run-${{ matrix.os }}
+        path-to-lcov: Tests/coverage.net8.0.info
+        parallel: true
+        format: lcov
+
+    - name: Upload coverage reports to Codecov
+      if: matrix.os == 'ubuntu-latest' && github.event_name != 'schedule'
+      uses: codecov/codecov-action@v4.0.1
+      with:
+        # Add CODECOV_TOKEN secret to enable Codecov integration
+        # token: ${{ secrets.CODECOV_TOKEN }}
+        slug: VikasAtEnEx/EnergyExemplar.EFCore.Duckdb.Extensions
+
+    - name: Upload Artifacts
+      if: matrix.os == 'ubuntu-latest' && github.event_name != 'pull_request' && github.actor == 'VikasAtEnEx'
+      uses: actions/upload-artifact@v4
+      with:
+        name: nugetPackages-${{github.ref_name}}
+        path: ./**/bin/Release/*.nupkg
+
+  publish:
+    needs: build
+    name: Publish Packages
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && github.event_name != 'schedule'
+    steps:
+    - name: Download nuget package artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: nugetPackages-${{github.ref_name}}
+
+    - name: Display structure of downloaded files
+      run: ls -R
+
+    - name: Prep packages
+      run: dotnet nuget add source --username VikasAtEnEx --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/VikasAtEnEx/index.json"
+
+    - name: Push package to GitHub packages
+      run: dotnet nuget push "**/*.nupkg" --api-key ${{ secrets.GITHUB_TOKEN }}  --source "github"
+      
+  Finish-Coveralls-Collection:
+    needs: build
+    name: Finish Coveralls Collection
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+    - name: Coveralls Finished
+      uses: coverallsapp/github-action@v2
+      with:
+        github-token: ${{ secrets.github_token }}
+        parallel-finished: true

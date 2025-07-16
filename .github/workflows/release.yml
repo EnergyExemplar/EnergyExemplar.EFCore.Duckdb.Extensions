@@ -1,0 +1,86 @@
+name: "Release"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Source/**'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to tag (e.g., 0.1.0)'
+        required: true
+        default: '0.1.0'
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET Core SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj
+
+    - name: Build
+      run: dotnet build Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj --configuration Release --no-restore
+
+    - name: Run tests
+      run: dotnet test Tests/Tests.csproj --configuration Release --verbosity normal
+
+    - name: Determine version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          # Auto-increment version based on existing tags
+          LATEST_TAG=$(git tag -l "0.1.*" --sort=-version:refname | head -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            VERSION="0.1.0"
+          else
+            # Extract patch version and increment
+            PATCH=$(echo $LATEST_TAG | sed 's/0\.1\.//')
+            NEW_PATCH=$((PATCH + 1))
+            VERSION="0.1.$NEW_PATCH"
+          fi
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version to be tagged: $VERSION"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: Release ${{ steps.version.outputs.version }}
+        body: |
+          ## EnergyExemplar.EFCore.Duckdb.Extensions ${{ steps.version.outputs.version }}
+          
+          🚀 **What's Changed**
+          - Latest updates and improvements
+          - Bug fixes and enhancements
+          
+          📦 **Installation**
+          ```bash
+          git clone https://github.com/VikasAtEnEx/EnergyExemplar.EFCore.Duckdb.Extensions.git
+          cd EnergyExemplar.EFCore.Duckdb.Extensions
+          git checkout ${{ steps.version.outputs.version }}
+          ```
+          
+          🔧 **Build from source**
+          ```bash
+          dotnet build Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj --configuration Release
+          ```
+        draft: false
+        prerelease: false
+        generate_release_notes: true
