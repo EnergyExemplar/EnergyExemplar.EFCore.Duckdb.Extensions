@@ -9,6 +9,11 @@ on:
 env:
   DOTNET_VERSION: '8.0.x'
 
+# Cancel in-progress runs when new commits are pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     name: Build and Test
@@ -33,7 +38,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/paket.lock') }}
         restore-keys: |
           ${{ runner.os }}-nuget-
 
@@ -41,19 +46,23 @@ jobs:
       run: dotnet restore
       working-directory: ./Source
 
+    - name: Check code formatting
+      run: dotnet format --verify-no-changes
+      working-directory: ./Source
+
     - name: Build
       run: dotnet build --no-restore --configuration ${{ matrix.configuration }}
       working-directory: ./Source
 
     - name: Test
-      run: dotnet test --no-build --verbosity normal --configuration ${{ matrix.configuration }} --collect:"XPlat Code Coverage" --results-directory ../coverage
+      run: dotnet test --no-build --verbosity normal --configuration ${{ matrix.configuration }} --collect:"XPlat Code Coverage" --results-directory ../coverage/${{ matrix.configuration }}
       working-directory: ./Tests
 
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
       if: matrix.configuration == 'Release'
       with:
-        directory: ./coverage/
+        directory: ./coverage/Release/
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
@@ -63,7 +72,7 @@ jobs:
       if: always()
       with:
         name: test-results-${{ matrix.configuration }}
-        path: ./coverage/
+        path: ./coverage/${{ matrix.configuration }}/
 
   security-scan:
     name: Security Scan
@@ -79,10 +88,32 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
-    - name: Run security scan
-      run: |
-        dotnet list package --vulnerable
-        dotnet list package --outdated
-
-    - name: Run dependency check
+    - name: Restore dependencies
       run: dotnet restore --verbosity normal
+      working-directory: ./Source
+
+    - name: Check for vulnerable packages
+      run: dotnet list package --vulnerable
+      working-directory: ./Source
+
+    - name: Check for outdated packages
+      run: dotnet list package --outdated
+      working-directory: ./Source
+
+    - name: Generate dependency report
+      run: |
+        echo "## Dependency Analysis Report" > dependency-report.md
+        echo "" >> dependency-report.md
+        echo "### Vulnerable Packages:" >> dependency-report.md
+        dotnet list package --vulnerable >> dependency-report.md 2>&1 || echo "No vulnerable packages found" >> dependency-report.md
+        echo "" >> dependency-report.md
+        echo "### Outdated Packages:" >> dependency-report.md
+        dotnet list package --outdated >> dependency-report.md 2>&1 || echo "No outdated packages found" >> dependency-report.md
+      working-directory: ./Source
+
+    - name: Upload dependency report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dependency-report
+        path: ./Source/dependency-report.md
