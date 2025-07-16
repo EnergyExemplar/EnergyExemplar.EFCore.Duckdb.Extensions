@@ -47,7 +47,7 @@ jobs:
       working-directory: ./Source
 
     - name: Check code formatting
-      run: dotnet format --verify-no-changes
+      run: dotnet format EnergyExemplar.EFCore.Duckdb.Extensions.sln --verify-no-changes
       working-directory: ./Source
 
     - name: Build
