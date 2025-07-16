@@ -52,4 +52,4 @@ namespace Tests.DuckDb
             Assert.That(rewritten, Does.Contain("AND").And.Contain("OR"));
         }
     }
-} 
+}

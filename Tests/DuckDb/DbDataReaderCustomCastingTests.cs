@@ -59,4 +59,4 @@ namespace Tests.DuckDb
             });
         }
     }
-} 
+}

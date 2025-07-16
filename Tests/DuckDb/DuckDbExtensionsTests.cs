@@ -137,13 +137,13 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             // Query with parameters to test SQL parameter replacement
             var minPrice = 50.0;
             var items = ctx.Items.Where(i => i.Price > minPrice).ToList();
-            
+
             Assert.That(items.Count, Is.GreaterThan(0));
             Assert.That(items.All(i => i.Price > minPrice), Is.True);
         }
@@ -154,20 +154,20 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             // Complex query with AND/OR conditions
             var items = ctx.Items
                 .Where(i => (i.InStock == true && i.Rating > 4.0) || i.Category == "Electronics")
                 .OrderBy(i => i.Price)
                 .ToList();
-            
+
             Assert.That(items.Count, Is.GreaterThan(0));
             // Verify ordering
             for (int i = 1; i < items.Count; i++)
             {
-                Assert.That(items[i].Price, Is.GreaterThanOrEqualTo(items[i-1].Price));
+                Assert.That(items[i].Price, Is.GreaterThanOrEqualTo(items[i - 1].Price));
             }
         }
 
@@ -177,9 +177,9 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             // First check if we have any items with names
             var allItems = ctx.Items.Where(i => i.Name != null).ToList();
             if (allItems.Count == 0)
@@ -187,16 +187,16 @@ namespace Tests.DuckDb
                 Assert.Inconclusive("No items with names in test data");
                 return;
             }
-            
+
             // Use a search term from actual data
             var firstItemName = allItems.First().Name;
             var searchTerm = firstItemName.Substring(0, Math.Min(3, firstItemName.Length));
-            
+
             var items = ctx.Items
                 .Where(i => i.Name.Contains(searchTerm))
                 .Select(i => new { i.ID, i.Name })
                 .ToList();
-            
+
             Assert.That(items.Count, Is.GreaterThan(0));
             Assert.That(items.All(i => i.Name.Contains(searchTerm)), Is.True);
         }
@@ -207,16 +207,16 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             // Test various aggregations
             var count = ctx.Items.Count();
             var avgPrice = ctx.Items.Average(i => i.Price);
             var maxRating = ctx.Items.Max(i => i.Rating);
             var minPrice = ctx.Items.Min(i => i.Price);
             var totalPrice = ctx.Items.Sum(i => i.Price);
-            
+
             Assert.That(count, Is.GreaterThan(0));
             Assert.That(avgPrice, Is.GreaterThan(0));
             Assert.That(maxRating, Is.GreaterThanOrEqualTo(0).And.LessThanOrEqualTo(5));
@@ -230,21 +230,21 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             // Group by category and calculate aggregates
             var categoryStats = ctx.Items
                 .GroupBy(i => i.Category)
-                .Select(g => new 
-                { 
+                .Select(g => new
+                {
                     Category = g.Key,
                     Count = g.Count(),
                     AvgPrice = g.Average(i => i.Price),
                     MaxRating = g.Max(i => i.Rating)
                 })
                 .ToList();
-            
+
             Assert.That(categoryStats.Count, Is.GreaterThan(0));
             Assert.That(categoryStats.All(c => c.Count > 0), Is.True);
             Assert.That(categoryStats.All(c => c.AvgPrice > 0), Is.True);
@@ -256,13 +256,13 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             // Test null handling
             var itemsWithRating = ctx.Items.Where(i => i.Rating != null).ToList();
             var itemsWithoutRating = ctx.Items.Where(i => i.Rating == null).ToList();
-            
+
             // At least verify the queries execute without error
             Assert.That(itemsWithRating.Count + itemsWithoutRating.Count, Is.GreaterThan(0));
         }
@@ -273,19 +273,19 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             var cutoffDate = new DateTime(2023, 1, 1);
             var recentItems = ctx.Items
                 .Where(i => i.DateAdded > cutoffDate)
                 .OrderByDescending(i => i.DateAdded)
                 .ToList();
-            
+
             // Verify query executes and ordering is correct
             for (int i = 1; i < recentItems.Count; i++)
             {
-                Assert.That(recentItems[i].DateAdded, Is.LessThanOrEqualTo(recentItems[i-1].DateAdded));
+                Assert.That(recentItems[i].DateAdded, Is.LessThanOrEqualTo(recentItems[i - 1].DateAdded));
             }
         }
 
@@ -295,16 +295,16 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             var pageSize = 5;
             var page1 = ctx.Items.OrderBy(i => i.ID).Take(pageSize).ToList();
             var page2 = ctx.Items.OrderBy(i => i.ID).Skip(pageSize).Take(pageSize).ToList();
-            
+
             Assert.That(page1.Count, Is.LessThanOrEqualTo(pageSize));
             Assert.That(page2.Count, Is.LessThanOrEqualTo(pageSize));
-            
+
             // Ensure no overlap between pages
             if (page1.Any() && page2.Any())
             {
@@ -320,17 +320,17 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             // FirstOrDefault
             var first = ctx.Items.FirstOrDefault();
             Assert.That(first, Is.Not.Null);
-            
+
             // FirstOrDefault with predicate
             var expensive = ctx.Items.FirstOrDefault(i => i.Price > 1000);
             // May or may not exist, just ensure no exception
-            
+
             // SingleOrDefault with impossible condition (should return null)
             var impossible = ctx.Items.SingleOrDefault(i => i.ID == -999);
             Assert.That(impossible, Is.Null);
@@ -342,13 +342,13 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             // This tests the DbDataReaderCustomCasting boolean conversion
             // EF Core often generates CASE WHEN EXISTS(...) THEN 1 ELSE 0 END
             var projections = ctx.Items
-                .Select(i => new 
+                .Select(i => new
                 {
                     i.ID,
                     i.Name,
@@ -357,7 +357,7 @@ namespace Tests.DuckDb
                     IsAvailable = i.InStock == true
                 })
                 .ToList();
-            
+
             Assert.That(projections.Count, Is.GreaterThan(0));
             // Verify boolean projections work correctly
             foreach (var item in projections)
@@ -374,17 +374,17 @@ namespace Tests.DuckDb
             var parquetPath = GetParquetPath();
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDbOnParquet(parquetPath);
-            
+
             using var ctx = new ParquetContext(builder.Options);
-            
+
             // Self-join to find items in same category
             var sameCategoryPairs = (from i1 in ctx.Items
-                                    from i2 in ctx.Items
-                                    where i1.Category == i2.Category && i1.ID < i2.ID
-                                    select new { Item1 = i1.Name, Item2 = i2.Name, Category = i1.Category })
+                                     from i2 in ctx.Items
+                                     where i1.Category == i2.Category && i1.ID < i2.ID
+                                     select new { Item1 = i1.Name, Item2 = i2.Name, Category = i1.Category })
                                     .Take(10)
                                     .ToList();
-            
+
             // Just ensure query executes
             Assert.That(sameCategoryPairs, Is.Not.Null);
         }
@@ -397,19 +397,19 @@ namespace Tests.DuckDb
                 ConnectionString = "DataSource=:memory:",
                 FileSearchPath = "/some/path"
             };
-            
+
             var builder = new DbContextOptionsBuilder<ParquetContext>();
             builder.UseDuckDb(options);
-            
+
             var coreExt = builder.Options.Extensions.OfType<Microsoft.EntityFrameworkCore.Infrastructure.CoreOptionsExtension>().Single();
             var interceptor = coreExt.Interceptors.Single(i => i.GetType().Name == "DuckDbCommandInterceptor");
-            
+
             // Verify FileSearchPath is stored in DuckDbSource
             var srcField = interceptor.GetType().GetField("_src", BindingFlags.NonPublic | BindingFlags.Instance)!;
             var src = srcField.GetValue(interceptor)!;
             var fileSearchPathProp = src.GetType().GetProperty("FileSearchPath", BindingFlags.Public | BindingFlags.Instance)!;
             var fileSearchPath = (string?)fileSearchPathProp.GetValue(src);
-            
+
             Assert.That(fileSearchPath, Is.EqualTo("/some/path"));
         }
 
@@ -423,18 +423,18 @@ namespace Tests.DuckDb
                 opts.MemoryLimitGB = 4;
                 opts.FileSearchPath = "/test/path";
             });
-            
+
             var coreExt = builder.Options.Extensions.OfType<Microsoft.EntityFrameworkCore.Infrastructure.CoreOptionsExtension>().Single();
             var interceptor = coreExt.Interceptors.Single(i => i.GetType().Name == "DuckDbCommandInterceptor");
-            
+
             // Verify all options were applied
             var srcField = interceptor.GetType().GetField("_src", BindingFlags.NonPublic | BindingFlags.Instance)!;
             var src = srcField.GetValue(interceptor)!;
-            
+
             var connStrProp = src.GetType().GetProperty("ConnectionString", BindingFlags.Public | BindingFlags.Instance)!;
             var connStr = (string)connStrProp.GetValue(src)!;
             Assert.That(connStr, Does.Contain("memory_limit=4GB"));
-            
+
             var fileSearchPathProp = src.GetType().GetProperty("FileSearchPath", BindingFlags.Public | BindingFlags.Instance)!;
             var fileSearchPath = (string?)fileSearchPathProp.GetValue(src);
             Assert.That(fileSearchPath, Is.EqualTo("/test/path"));
