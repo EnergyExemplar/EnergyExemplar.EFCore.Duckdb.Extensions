@@ -1,19 +1,15 @@
 name: CI
-
 on:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
-
 env:
   DOTNET_VERSION: '8.0.x'
-
 # Cancel in-progress runs when new commits are pushed
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   build-and-test:
     name: Build and Test
@@ -28,12 +24,10 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
-
     - name: Cache dependencies
       uses: actions/cache@v4
       with:
@@ -41,23 +35,18 @@ jobs:
         key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/paket.lock') }}
         restore-keys: |
           ${{ runner.os }}-nuget-
-
     - name: Restore dependencies
       run: dotnet restore
       working-directory: ./Source
-
     - name: Check code formatting
       run: dotnet format EnergyExemplar.EFCore.Duckdb.Extensions.sln --verify-no-changes
       working-directory: ./Source
-
     - name: Build
       run: dotnet build --no-restore --configuration ${{ matrix.configuration }}
       working-directory: ./Source
-
     - name: Test
       run: dotnet test --no-build --verbosity normal --configuration ${{ matrix.configuration }} --collect:"XPlat Code Coverage" --results-directory ../coverage/${{ matrix.configuration }}
       working-directory: ./Tests
-
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
       if: matrix.configuration == 'Release'
@@ -66,14 +55,13 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
-
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results-${{ matrix.configuration }}
         path: ./coverage/${{ matrix.configuration }}/
-
+        
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -82,24 +70,19 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
-
     - name: Restore dependencies
       run: dotnet restore --verbosity normal
       working-directory: ./Source
-
     - name: Check for vulnerable packages
       run: dotnet list package --vulnerable
       working-directory: ./Source
-
     - name: Check for outdated packages
       run: dotnet list package --outdated
       working-directory: ./Source
-
     - name: Generate dependency report
       run: |
         echo "## Dependency Analysis Report" > dependency-report.md
@@ -110,10 +93,116 @@ jobs:
         echo "### Outdated Packages:" >> dependency-report.md
         dotnet list package --outdated >> dependency-report.md 2>&1 || echo "No outdated packages found" >> dependency-report.md
       working-directory: ./Source
-
     - name: Upload dependency report
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: dependency-report
         path: ./Source/dependency-report.md
+
+  release:
+    name: Create Release Package
+    runs-on: ubuntu-latest
+    needs: [build-and-test, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for tags
+        
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+        
+    - name: Get latest version tag
+      id: get_version
+      run: |
+        # Get the latest tag matching 0.1.* pattern
+        LATEST_TAG=$(git tag -l "0.1.*" | sort -V | tail -n1)
+        
+        if [ -z "$LATEST_TAG" ]; then
+          # No tags exist, start with 0.1.0
+          NEW_VERSION="0.1.0"
+        else
+          # Extract patch version and increment
+          PATCH_VERSION=$(echo $LATEST_TAG | cut -d'.' -f3)
+          NEW_PATCH=$((PATCH_VERSION + 1))
+          NEW_VERSION="0.1.$NEW_PATCH"
+        fi
+        
+        echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "Latest tag: $LATEST_TAG"
+        echo "New version: $NEW_VERSION"
+        
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Packages.props', '**/paket.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+          
+    - name: Restore dependencies
+      run: dotnet restore
+      working-directory: ./Source
+      
+    - name: Build Release
+      run: dotnet build --no-restore --configuration Release
+      working-directory: ./Source
+      
+    - name: Create artifacts directory
+      run: mkdir -p ./artifacts
+      
+    - name: Publish application
+      run: dotnet publish --no-build --configuration Release --output ../publish/
+      working-directory: ./Source
+      
+    - name: Create version info file
+      run: |
+        echo "Version: ${{ steps.get_version.outputs.new_version }}" > ./publish/VERSION.txt
+        echo "Build Date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> ./publish/VERSION.txt
+        echo "Commit: ${{ github.sha }}" >> ./publish/VERSION.txt
+        echo "Branch: ${{ github.ref_name }}" >> ./publish/VERSION.txt
+        
+    - name: Create release zip
+      run: |
+        cd ./publish
+        zip -r ../artifacts/EnergyExemplar.EFCore.Duckdb.Extensions-${{ steps.get_version.outputs.new_version }}.zip .
+        
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-package-${{ steps.get_version.outputs.new_version }}
+        path: ./artifacts/
+        
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_version.outputs.new_version }}
+        release_name: Release ${{ steps.get_version.outputs.new_version }}
+        body: |
+          ## Release ${{ steps.get_version.outputs.new_version }}
+          
+          ### Changes
+          - Automated release from commit ${{ github.sha }}
+          
+          ### Download
+          The release package is available as a zip file in the artifacts.
+        draft: false
+        prerelease: false
+        
+    - name: Upload release asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/EnergyExemplar.EFCore.Duckdb.Extensions-${{ steps.get_version.outputs.new_version }}.zip
+        asset_name: EnergyExemplar.EFCore.Duckdb.Extensions-${{ steps.get_version.outputs.new_version }}.zip
+        asset_content_type: application/zip
