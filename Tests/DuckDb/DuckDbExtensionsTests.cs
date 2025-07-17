@@ -48,7 +48,7 @@ namespace Tests.DuckDb
             // Run a simple query against the parquet data
             using var ctx = new ParquetContext(options);
             bool hasRows = ctx.Items.Any();
-            Assert.That(hasRows, Is.True, "Expected at least one row in parquet_view.");
+            Assert.That(hasRows, Is.True, "Expected at least one row in test view.");
         }
 
         [Test]
@@ -113,7 +113,7 @@ namespace Tests.DuckDb
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<ParquetItem>().ToView("parquet_view").HasNoKey();
+                modelBuilder.Entity<ParquetItem>().ToView("test").HasNoKey();
             }
         }
 

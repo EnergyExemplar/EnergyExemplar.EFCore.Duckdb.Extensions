@@ -27,7 +27,7 @@ namespace Tests.DuckDb
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<TestItem>().ToView("parquet_view").HasNoKey();
+                modelBuilder.Entity<TestItem>().ToView("test").HasNoKey();
             }
         }
 
@@ -203,7 +203,7 @@ namespace Tests.DuckDb
 
             using var ctx = new TestContext(builder.Options);
 
-            // The interceptor should create a view called "parquet_view"
+            // The interceptor should create a view called "test"
             // If this query works, the view was created successfully
             var items = ctx.Items.Take(1).ToList();
 
@@ -290,6 +290,79 @@ namespace Tests.DuckDb
 
             // If we get here without connection exhaustion, disposal is working
             Assert.Pass("Resources disposed properly across multiple contexts");
+        }
+
+        [Test]
+        public void Interceptor_Should_Handle_Decimal_Type_Conversion()
+        {
+            var parquetPath = GetParquetPath();
+            var builder = new DbContextOptionsBuilder<TestContext>();
+            builder.UseDuckDbOnParquet(parquetPath);
+
+            using var ctx = new TestContext(builder.Options);
+
+            // Test querying and projecting decimal values
+            // This tests the custom GetDecimal implementation in DbDataReaderCustomCasting
+            var decimalProjections = ctx.Items
+                .Select(i => new { 
+                    ID = i.ID, 
+                    PriceAsDecimal = (decimal?)i.Price,  // Cast double to decimal
+                    RatingAsDecimal = (decimal?)i.Rating // Cast double to decimal for rating
+                })
+                .Take(5)
+                .ToList();
+
+            Assert.That(decimalProjections.Count, Is.GreaterThan(0));
+            
+            foreach (var item in decimalProjections.Where(x => x.PriceAsDecimal.HasValue))
+            {
+                Assert.That(item.PriceAsDecimal!.Value, Is.TypeOf<decimal>(), "PriceAsDecimal should be decimal type");
+                Assert.That(item.PriceAsDecimal.Value, Is.GreaterThanOrEqualTo(0), "Price should be non-negative");
+            }
+
+            foreach (var item in decimalProjections.Where(x => x.RatingAsDecimal.HasValue))
+            {
+                Assert.That(item.RatingAsDecimal!.Value, Is.TypeOf<decimal>(), "RatingAsDecimal should be decimal type");
+                Assert.That(item.RatingAsDecimal.Value, Is.GreaterThanOrEqualTo(0), "Rating should be non-negative");
+            }
+        }
+
+        [Test]
+        public void Interceptor_Should_Handle_Decimal_Arithmetic_Operations()
+        {
+            var parquetPath = GetParquetPath();
+            var builder = new DbContextOptionsBuilder<TestContext>();
+            builder.UseDuckDbOnParquet(parquetPath);
+
+            using var ctx = new TestContext(builder.Options);
+
+            // Test decimal arithmetic in projections
+            var arithmeticResults = ctx.Items
+                .Where(i => i.Price.HasValue)
+                .Select(i => new { 
+                    ID = i.ID,
+                    OriginalPrice = i.Price,
+                    PriceWithTax = (decimal)(i.Price!.Value * 1.1), // Should trigger decimal conversion
+                    DiscountedPrice = (decimal)(i.Price!.Value * 0.9)
+                })
+                .Take(3)
+                .ToList();
+
+            Assert.That(arithmeticResults.Count, Is.GreaterThan(0));
+            
+            foreach (var result in arithmeticResults)
+            {
+                Assert.That(result.PriceWithTax, Is.TypeOf<decimal>());
+                Assert.That(result.DiscountedPrice, Is.TypeOf<decimal>());
+                if (result.OriginalPrice.HasValue)
+                {
+                    var expectedTaxPrice = (decimal)(result.OriginalPrice.Value * 1.1);
+                    var expectedDiscountPrice = (decimal)(result.OriginalPrice.Value * 0.9);
+                    
+                    Assert.That(result.PriceWithTax, Is.EqualTo(expectedTaxPrice).Within(0.01m));
+                    Assert.That(result.DiscountedPrice, Is.EqualTo(expectedDiscountPrice).Within(0.01m));
+                }
+            }
         }
     }
 }
