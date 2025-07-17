@@ -1,0 +1,31 @@
+name: NuGet Release
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+    - name: Download Artifacts from CI
+      uses: dawidd6/action-download-artifact@v6
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        workflow: ci.yml
+        workflow_conclusion: success
+        branch: ${{ github.ref_name }}
+        name: nuget-packages
+    
+    - name: Display structure of downloaded files (debug)
+      run: ls -R
+      if: failure()  # Run only on failure for debugging
+    
+    - name: Push package to NuGet.org
+      run: dotnet nuget push "**/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
