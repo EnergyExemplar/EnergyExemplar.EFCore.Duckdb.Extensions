@@ -109,9 +109,9 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb.Interceptors
         public override Type GetFieldType(int ordinal) => _inner.GetFieldType(ordinal);
         public override object GetValue(int ordinal) => _inner.GetValue(ordinal);
         public override byte GetByte(int ordinal) => _inner.GetByte(ordinal);
-        public override long GetBytes(int ordinal, long dataOffset, byte[] buffer, int bufferOffset, int length) => _inner.GetBytes(ordinal, dataOffset, buffer, bufferOffset, length);
+        public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length) => _inner.GetBytes(ordinal, dataOffset, buffer, bufferOffset, length);
         public override char GetChar(int ordinal) => _inner.GetChar(ordinal);
-        public override long GetChars(int ordinal, long dataOffset, char[] buffer, int bufferOffset, int length) => _inner.GetChars(ordinal, dataOffset, buffer, bufferOffset, length);
+        public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length) => _inner.GetChars(ordinal, dataOffset, buffer, bufferOffset, length);
         public override Guid GetGuid(int ordinal) => _inner.GetGuid(ordinal);
         public override short GetInt16(int ordinal) => _inner.GetInt16(ordinal);
         public override int GetInt32(int ordinal) => _inner.GetInt32(ordinal);
@@ -154,7 +154,35 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb.Interceptors
         public override float GetFloat(int ordinal) => _inner.GetFloat(ordinal);
         public override double GetDouble(int ordinal) => _inner.GetDouble(ordinal);
         public override string GetString(int ordinal) => _inner.GetString(ordinal);
-        public override decimal GetDecimal(int ordinal) => _inner.GetDecimal(ordinal);
+        
+        public override decimal GetDecimal(int ordinal)
+        {
+            var value = _inner.GetValue(ordinal);
+
+            switch (value)
+            {
+                case decimal dec:
+                    return dec;
+                case double d:
+                    return Convert.ToDecimal(d);
+                case float f:
+                    return Convert.ToDecimal(f);
+                case long l:
+                    return Convert.ToDecimal(l);
+                case int i:
+                    return Convert.ToDecimal(i);
+                case short s:
+                    return Convert.ToDecimal(s);
+                case byte b:
+                    return Convert.ToDecimal(b);
+                case string s when decimal.TryParse(s, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed):
+                    return parsed;
+                default:
+                    // Fallback to system conversion (handles DBNull etc.)
+                    return Convert.ToDecimal(value);
+            }
+        }
+        
         public override DateTime GetDateTime(int ordinal) => _inner.GetDateTime(ordinal);
         public override bool IsDBNull(int ordinal) => _inner.IsDBNull(ordinal);
         public override System.Collections.IEnumerator GetEnumerator() => _inner.GetEnumerator();
