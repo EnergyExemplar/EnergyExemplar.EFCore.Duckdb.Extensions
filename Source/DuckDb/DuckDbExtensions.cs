@@ -184,7 +184,10 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb
                 {
                     using var createView = conn.CreateCommand();
                     string fileEsc = _src.ParquetFile.Replace("'", "''");
-                    createView.CommandText = $"CREATE OR REPLACE VIEW parquet_view AS SELECT * FROM read_parquet('{fileEsc}');";
+                    // Derive view name from the parquet file name (without extension)
+                    string viewName = System.IO.Path.GetFileNameWithoutExtension(_src.ParquetFile);
+                    // Quote the view name to preserve case and handle special characters
+                    createView.CommandText = $"CREATE OR REPLACE VIEW \"{viewName}\" AS SELECT * FROM read_parquet('{fileEsc}');";
                     if (async) await createView.ExecuteNonQueryAsync(token); else createView.ExecuteNonQuery();
                 }
 

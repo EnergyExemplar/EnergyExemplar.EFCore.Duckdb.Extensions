@@ -58,5 +58,63 @@ namespace Tests.DuckDb
                 Assert.That(reader.IsDBNull(5), Is.True);
             });
         }
+
+        [Test]
+        public void GetDecimal_Should_Handle_Double_Float_And_Integer_Types()
+        {
+            using var conn = CreateConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT 123.45::DOUBLE AS doubleVal, 67.89::REAL AS floatVal, 100 AS intVal, 9223372036854775807::BIGINT AS longVal, 12::SMALLINT AS shortVal, 127::TINYINT AS byteVal, '123.456' AS strVal, NULL AS nullVal";
+            using var reader = new DbDataReaderCustomCasting(cmd.ExecuteReader());
+            Assert.That(reader.Read(), Is.True);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(reader.GetDecimal(0), Is.EqualTo(123.45m)); // double → decimal
+                Assert.That(reader.GetDecimal(1), Is.EqualTo(67.89m).Within(0.001m)); // float → decimal (with tolerance for float precision)
+                Assert.That(reader.GetDecimal(2), Is.EqualTo(100m)); // int → decimal
+                Assert.That(reader.GetDecimal(3), Is.EqualTo(9223372036854775807m)); // long → decimal
+                Assert.That(reader.GetDecimal(4), Is.EqualTo(12m)); // short → decimal
+                Assert.That(reader.GetDecimal(5), Is.EqualTo(127m)); // byte → decimal (127 is max signed byte)
+                Assert.That(reader.GetDecimal(6), Is.EqualTo(123.456m)); // string → decimal
+                // Verify NULL handling
+                Assert.That(reader.IsDBNull(7), Is.True);
+            });
+        }
+
+        [Test]
+        public void GetDecimal_Should_Handle_Large_Double_Values()
+        {
+            using var conn = CreateConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT 999999999.99::DOUBLE AS largeDouble, -123456789.123::DOUBLE AS negativeDouble";
+            using var reader = new DbDataReaderCustomCasting(cmd.ExecuteReader());
+            Assert.That(reader.Read(), Is.True);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(reader.GetDecimal(0), Is.EqualTo(999999999.99m));
+                Assert.That(reader.GetDecimal(1), Is.EqualTo(-123456789.123m));
+            });
+        }
+
+        [Test]
+        public void GetDecimal_Should_Handle_Edge_Cases()
+        {
+            using var conn = CreateConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT 0.0::DOUBLE AS zero, -0.0::DOUBLE AS negativeZero, 'NaN' AS nanString, 'invalid' AS invalidString";
+            using var reader = new DbDataReaderCustomCasting(cmd.ExecuteReader());
+            Assert.That(reader.Read(), Is.True);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(reader.GetDecimal(0), Is.EqualTo(0m));
+                Assert.That(reader.GetDecimal(1), Is.EqualTo(0m));
+                
+                // Test invalid string conversion - should throw or handle gracefully
+                Assert.Throws<FormatException>(() => reader.GetDecimal(3)); // 'invalid' string should throw
+            });
+        }
     }
 }

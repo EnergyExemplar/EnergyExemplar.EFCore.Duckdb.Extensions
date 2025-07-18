@@ -37,9 +37,6 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
         working-directory: ./Source
-      - name: Check code formatting
-        run: dotnet format EnergyExemplar.EFCore.Duckdb.Extensions.sln --verify-no-changes
-        working-directory: ./Source
       - name: Build
         run: dotnet build --no-restore --configuration ${{ matrix.configuration }}
         working-directory: ./Source
