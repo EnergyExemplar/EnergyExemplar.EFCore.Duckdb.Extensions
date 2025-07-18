@@ -157,6 +157,15 @@ jobs:
       - name: Build Release
         run: dotnet build --no-restore --configuration Release
         working-directory: ./Source
+      
+      - name: Pack NuGet package
+        run: dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj --no-build --configuration Release --output ./nuget-packages /p:Version=${{ steps.get_version.outputs.new_version }}
+      
+      - name: Upload NuGet artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: ./nuget-packages/*.nupkg
 
       - name: Create artifacts directory
         run: mkdir -p ./artifacts

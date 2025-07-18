@@ -11,8 +11,28 @@
     
     <!-- NuGet Package Properties -->
     <PackageId>EnergyExemplar.EntityFrameworkCore.DuckDb</PackageId>
+    <Version>0.1.0-preview</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <Title>DuckDB Entity Framework Core Integration</Title>
+    <Description>Seamless integration between Entity Framework Core and DuckDB, providing significant performance improvements for analytical queries with a simple, developer-friendly API.</Description>
+    <Authors>Energy Exemplar Pty Ltd</Authors>
+    <Company>Energy Exemplar Pty Ltd</Company>
+    <Product>EnergyExemplar DuckDB Extensions</Product>
+    <Copyright>Copyright (c) 2025 Energy Exemplar Pty Ltd</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/EnergyExemplar/EnergyExemplar.EFCore.Duckdb.Extensions</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/EnergyExemplar/EnergyExemplar.EFCore.Duckdb.Extensions</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>entityframework;efcore;duckdb;duckdb.net,database;analytics;parquet;performance;columnar</PackageTags>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\LICENSE" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="DuckDB.NET.Data.Full" Version="1.2.1" />
