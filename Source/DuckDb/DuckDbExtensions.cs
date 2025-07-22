@@ -1,5 +1,4 @@
 using DuckDB.NET.Data;
-using EnergyExemplar.EntityFrameworkCore.DuckDb.Configuration;
 using EnergyExemplar.EntityFrameworkCore.DuckDb.Interceptors;
 using EnergyExemplar.Extensions.DuckDb.Internals;
 using Microsoft.EntityFrameworkCore;
@@ -13,8 +12,7 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb
     internal readonly record struct DuckDbSource(
         string ConnectionString,
         string? ParquetFile = null,
-        string? FileSearchPath = null,
-        MultiParquetConfiguration? MultiParquetConfig = null);
+        string? FileSearchPath = null);
 
     /// <summary>
     /// A contract for holding all DuckDB connection and configuration settings.
@@ -111,41 +109,6 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb
             return Configure(builder, src, noTracking, sqliteOptionsAction);
         }
 
-        /// <summary>
-        /// Connect to multiple parquet files with relationships as a DuckDB data source.
-        /// This allows for navigation properties across multiple parquet files.
-        /// </summary>
-        public static DbContextOptionsBuilder UseDuckDbOnMultipleParquet(
-            this DbContextOptionsBuilder builder,
-            MultiParquetConfiguration configuration,
-            bool noTracking = true,
-            Action<Microsoft.EntityFrameworkCore.Infrastructure.SqliteDbContextOptionsBuilder>? sqliteOptionsAction = null)
-        {
-            ArgumentNullException.ThrowIfNull(builder);
-            ArgumentNullException.ThrowIfNull(configuration);
-
-            var conn = "DataSource=:memory:"; // keep DB in-memory and read parquet via views
-            var src = new DuckDbSource(conn, null, null, configuration);
-            return Configure(builder, src, noTracking, sqliteOptionsAction);
-        }
-
-        /// <summary>
-        /// Connect to multiple parquet files with relationships as a DuckDB data source using a configuration action.
-        /// </summary>
-        public static DbContextOptionsBuilder UseDuckDbOnMultipleParquet(
-            this DbContextOptionsBuilder builder,
-            Action<MultiParquetConfiguration> configureConfiguration,
-            bool noTracking = true,
-            Action<Microsoft.EntityFrameworkCore.Infrastructure.SqliteDbContextOptionsBuilder>? sqliteOptionsAction = null)
-        {
-            ArgumentNullException.ThrowIfNull(builder);
-            ArgumentNullException.ThrowIfNull(configureConfiguration);
-
-            var configuration = new MultiParquetConfiguration();
-            configureConfiguration(configuration);
-            return builder.UseDuckDbOnMultipleParquet(configuration, noTracking, sqliteOptionsAction);
-        }
-
         // internal shared config helper
         private static DbContextOptionsBuilder Configure(DbContextOptionsBuilder b, DuckDbSource src, bool noTrack,
             Action<Microsoft.EntityFrameworkCore.Infrastructure.SqliteDbContextOptionsBuilder>? sqliteOptionsAction)
@@ -181,13 +144,8 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb
     internal sealed class DuckDbCommandInterceptor : DbCommandInterceptor
     {
         private readonly DuckDbSource _src;
-        private readonly ParquetTableResolver? _tableResolver;
 
-        public DuckDbCommandInterceptor(DuckDbSource src)
-        {
-            _src = src;
-            _tableResolver = src.MultiParquetConfig != null ? new ParquetTableResolver(src.MultiParquetConfig) : null;
-        }
+        public DuckDbCommandInterceptor(DuckDbSource src) => _src = src;
 
         public override InterceptionResult<DbDataReader> ReaderExecuting(DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
         {
@@ -221,10 +179,9 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb
                     if (async) await setPath.ExecuteNonQueryAsync(token); else setPath.ExecuteNonQuery();
                 }
 
-                // create views for parquet files – done per-connection; cheap and avoids race concerns
+                // create view for single-file mode – done per-connection; cheap and avoids race concerns
                 if (_src.ParquetFile is not null)
                 {
-                    // Single parquet file mode
                     using var createView = conn.CreateCommand();
                     string fileEsc = _src.ParquetFile.Replace("'", "''");
                     // Derive view name from the parquet file name (without extension)
@@ -232,11 +189,6 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb
                     // Quote the view name to preserve case and handle special characters
                     createView.CommandText = $"CREATE OR REPLACE VIEW \"{viewName}\" AS SELECT * FROM read_parquet('{fileEsc}');";
                     if (async) await createView.ExecuteNonQueryAsync(token); else createView.ExecuteNonQuery();
-                }
-                else if (_tableResolver is not null)
-                {
-                    // Multi-parquet file mode
-                    await _tableResolver.CreateViewsAsync(conn, token);
                 }
 
                 var duckCmd = conn.CreateCommand();
