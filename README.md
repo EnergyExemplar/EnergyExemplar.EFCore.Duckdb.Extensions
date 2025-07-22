@@ -90,6 +90,140 @@ var options = new DbContextOptionsBuilder<MyDbContext>()
     .Options;
 ```
 
+### 5. Multiple Parquet Files with Navigation Properties
+
+```csharp
+using EnergyExemplar.EntityFrameworkCore.DuckDb.Configuration;
+
+// Configure multiple parquet files with relationships
+var configuration = new MultiParquetConfiguration()
+    .AddTable<Customer>("C:/data/customers.parquet", "customers")
+    .AddTable<Order>("C:/data/orders.parquet", "orders")
+    .AddTable<Product>("C:/data/products.parquet", "products")
+    .AddRelationship<Customer, Order>("CustomerId", "Id", "Orders", "Customer")
+    .AddRelationship<Order, OrderItem>("OrderId", "Id", "Items", "Order")
+    .AddRelationship<Product, OrderItem>("ProductId", "Id", "Items", "Product");
+
+var options = new DbContextOptionsBuilder<MyDbContext>()
+    .UseDuckDbOnMultipleParquet(configuration)
+    .Options;
+
+// Or use the fluent configuration approach
+var options = new DbContextOptionsBuilder<MyDbContext>()
+    .UseDuckDbOnMultipleParquet(config =>
+    {
+        config.AddTable<Customer>("C:/data/customers.parquet", "customers")
+              .AddTable<Order>("C:/data/orders.parquet", "orders")
+              .AddRelationship<Customer, Order>("CustomerId", "Id", "Orders", "Customer");
+    })
+    .Options;
+```
+
+#### DbContext Configuration for Multi-Parquet
+
+```csharp
+public class MyDbContext : DbContext
+{
+    private readonly MultiParquetConfiguration _configuration;
+
+    public MyDbContext(DbContextOptions<MyDbContext> options, MultiParquetConfiguration configuration) 
+        : base(options)
+    {
+        _configuration = configuration;
+    }
+
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<Product> Products => Set<Product>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Configure parquet table relationships
+        modelBuilder.ConfigureParquetRelationships(_configuration);
+
+        // Configure entity mappings
+        modelBuilder.Entity<Customer>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired();
+        });
+
+        modelBuilder.Entity<Order>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.OrderDate).IsRequired();
+        });
+    }
+}
+```
+
+#### Entity Models with Navigation Properties
+
+```csharp
+public class Customer
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    
+    // Navigation property to related orders
+    public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
+}
+
+public class Order
+{
+    public int Id { get; set; }
+    public int CustomerId { get; set; }
+    public DateTime OrderDate { get; set; }
+    public decimal TotalAmount { get; set; }
+    
+    // Navigation properties
+    public virtual Customer Customer { get; set; } = null!;
+    public virtual ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
+}
+
+public class OrderItem
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public int ProductId { get; set; }
+    public int Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+    
+    // Navigation properties
+    public virtual Order Order { get; set; } = null!;
+    public virtual Product Product { get; set; } = null!;
+}
+```
+
+#### Using Navigation Properties
+
+```csharp
+using var context = new MyDbContext(options, configuration);
+
+// Query with navigation properties
+var customersWithOrders = await context.Customers
+    .Include(c => c.Orders)
+    .ThenInclude(o => o.Items)
+    .ThenInclude(i => i.Product)
+    .Where(c => c.Orders.Any(o => o.OrderDate >= DateTime.Today.AddDays(-30)))
+    .ToListAsync();
+
+// Join queries across multiple parquet files
+var orderSummary = await context.Orders
+    .Join(context.Customers, o => o.CustomerId, c => c.Id, (order, customer) => new
+    {
+        OrderId = order.Id,
+        CustomerName = customer.Name,
+        OrderDate = order.OrderDate,
+        TotalAmount = order.TotalAmount
+    })
+    .Where(x => x.OrderDate >= DateTime.Today.AddDays(-7))
+    .ToListAsync();
+```
+
 > **Tip**: Change tracking is disabled by default for maximum performance. To enable it, pass `noTracking: false` to `UseDuckDbOnParquet()` or set `NoTracking = false` on `DuckDbConnectionOptions`.
 
 ## Migration from Previous Implementation
