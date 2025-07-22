@@ -7,6 +7,7 @@ This provides a seamless integration between Entity Framework Core and DuckDB, a
 - **Simple API**: Just use `UseDuckDb()` similar to `UseSqlite()` or `UseSqlServer()`
 - **Automatic SQL Translation**: Converts EF Core generated SQL to DuckDB-compatible SQL
 - **Full EF Core Support**: Works with LINQ queries, navigation properties, and all EF Core features
+- **Multi-Parquet Support**: Connect multiple parquet files with navigation properties and relationships
 - **Performance**: Leverages DuckDB's columnar storage for fast analytical queries on Parquet files with significant performance improvements over SQLite
 - **Developer-Friendly API**: The extension replaces fragile, manual setups with a clean, fluent API. This reduces code complexity, improves maintainability, and accelerates development.
 
@@ -90,6 +91,140 @@ var options = new DbContextOptionsBuilder<MyDbContext>()
     .Options;
 ```
 
+### 5. Multiple Parquet Files with Navigation Properties
+
+```csharp
+using EnergyExemplar.EntityFrameworkCore.DuckDb.Configuration;
+
+// Configure multiple parquet files with relationships
+var configuration = new MultiParquetConfiguration()
+    .AddTable<Customer>("C:/data/customers.parquet", "customers")
+    .AddTable<Order>("C:/data/orders.parquet", "orders")
+    .AddTable<Product>("C:/data/products.parquet", "products")
+    .AddRelationship<Customer, Order>("CustomerId", "Id", "Orders", "Customer")
+    .AddRelationship<Order, OrderItem>("OrderId", "Id", "Items", "Order")
+    .AddRelationship<Product, OrderItem>("ProductId", "Id", "Items", "Product");
+
+var options = new DbContextOptionsBuilder<MyDbContext>()
+    .UseDuckDbOnMultipleParquet(configuration)
+    .Options;
+
+// Or use the fluent configuration approach
+var options = new DbContextOptionsBuilder<MyDbContext>()
+    .UseDuckDbOnMultipleParquet(config =>
+    {
+        config.AddTable<Customer>("C:/data/customers.parquet", "customers")
+              .AddTable<Order>("C:/data/orders.parquet", "orders")
+              .AddRelationship<Customer, Order>("CustomerId", "Id", "Orders", "Customer");
+    })
+    .Options;
+```
+
+#### DbContext Configuration for Multi-Parquet
+
+```csharp
+public class MyDbContext : DbContext
+{
+    private readonly MultiParquetConfiguration _configuration;
+
+    public MyDbContext(DbContextOptions<MyDbContext> options, MultiParquetConfiguration configuration) 
+        : base(options)
+    {
+        _configuration = configuration;
+    }
+
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Order> Orders => Set<Order>();
+    public DbSet<Product> Products => Set<Product>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Configure parquet table relationships
+        modelBuilder.ConfigureParquetRelationships(_configuration);
+
+        // Configure entity mappings
+        modelBuilder.Entity<Customer>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired();
+        });
+
+        modelBuilder.Entity<Order>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.OrderDate).IsRequired();
+        });
+    }
+}
+```
+
+#### Entity Models with Navigation Properties
+
+```csharp
+public class Customer
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    
+    // Navigation property to related orders
+    public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
+}
+
+public class Order
+{
+    public int Id { get; set; }
+    public int CustomerId { get; set; }
+    public DateTime OrderDate { get; set; }
+    public decimal TotalAmount { get; set; }
+    
+    // Navigation properties
+    public virtual Customer Customer { get; set; } = null!;
+    public virtual ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
+}
+
+public class OrderItem
+{
+    public int Id { get; set; }
+    public int OrderId { get; set; }
+    public int ProductId { get; set; }
+    public int Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+    
+    // Navigation properties
+    public virtual Order Order { get; set; } = null!;
+    public virtual Product Product { get; set; } = null!;
+}
+```
+
+#### Using Navigation Properties
+
+```csharp
+using var context = new MyDbContext(options, configuration);
+
+// Query with navigation properties
+var customersWithOrders = await context.Customers
+    .Include(c => c.Orders)
+    .ThenInclude(o => o.Items)
+    .ThenInclude(i => i.Product)
+    .Where(c => c.Orders.Any(o => o.OrderDate >= DateTime.Today.AddDays(-30)))
+    .ToListAsync();
+
+// Join queries across multiple parquet files
+var orderSummary = await context.Orders
+    .Join(context.Customers, o => o.CustomerId, c => c.Id, (order, customer) => new
+    {
+        OrderId = order.Id,
+        CustomerName = customer.Name,
+        OrderDate = order.OrderDate,
+        TotalAmount = order.TotalAmount
+    })
+    .Where(x => x.OrderDate >= DateTime.Today.AddDays(-7))
+    .ToListAsync();
+```
+
 > **Tip**: Change tracking is disabled by default for maximum performance. To enable it, pass `noTracking: false` to `UseDuckDbOnParquet()` or set `NoTracking = false` on `DuckDbConnectionOptions`.
 
 ## Migration from Previous Implementation
@@ -115,6 +250,31 @@ var options = new DbContextOptionsBuilder<MyDbContext>()
 - **FileSearchPath** (optional): Base directory for resolving relative paths in DuckDB views
 - **MemoryLimitGB** (optional): Memory limit for DuckDB operations (in GB)
 - **NoTracking** (optional): If true (the default), all queries will be executed with `AsNoTracking()`. Set to `false` to enable change tracking.
+
+### MultiParquetConfiguration Properties
+
+- **Tables**: Collection of `ParquetTableConfiguration` objects defining parquet file mappings
+- **Relationships**: Collection of `ParquetRelationshipConfiguration` objects defining entity relationships
+
+#### ParquetTableConfiguration Properties
+
+- **ParquetFilePath** (required): Full path to the parquet file
+- **TableName** (optional): Custom table/view name in DuckDB (defaults to filename without extension)
+- **Schema** (optional): Schema name for the table/view
+- **EntityType** (required): The .NET entity type this parquet file maps to
+- **CreateAsView** (optional): Whether to create as view (default) or table
+- **DuckDbOptions** (optional): Additional DuckDB options for reading the parquet file
+
+#### ParquetRelationshipConfiguration Properties
+
+- **PrincipalEntityType** (required): The "one" side entity type in one-to-many relationships
+- **DependentEntityType** (required): The "many" side entity type in one-to-many relationships
+- **ForeignKeyPropertyName** (required): Foreign key property name in the dependent entity
+- **PrincipalKeyPropertyName** (optional): Primary key property name in the principal entity (defaults to "Id")
+- **PrincipalNavigationPropertyName** (optional): Navigation property name in the principal entity
+- **DependentNavigationPropertyName** (optional): Navigation property name in the dependent entity
+- **IsRequired** (optional): Whether the relationship is required (not nullable)
+- **DeleteBehavior** (optional): Delete behavior for the relationship
 
 ## Example: Complete Application
 
@@ -177,12 +337,31 @@ services.AddDbContext<MyParquetContext>(options =>
 );
 ```
 
+### Multi-Parquet Context with Relationships
+
+```csharp
+services.AddDbContext<MyMultiParquetContext>((serviceProvider, options) =>
+{
+    var configuration = new MultiParquetConfiguration()
+        .AddTable<Customer>("C:/data/customers.parquet", "customers")
+        .AddTable<Order>("C:/data/orders.parquet", "orders")
+        .AddRelationship<Customer, Order>("CustomerId", "Id", "Orders", "Customer");
+    
+    options.UseDuckDbOnMultipleParquet(configuration);
+});
+```
+
 ## Troubleshooting
 
 1. **Memory Issues**: Set `MemoryLimitGB` in the options lambda or object.
 2. **Path Issues**: Ensure `FileSearchPath` is set correctly for relative paths in views.
 3. **Write Operations**: The integration is read-only; any write operation will throw `NotSupportedException`.
 4. **Performance**: DuckDB excels at analytical queries but may be slower for OLTP workloads.
+5. **Multi-Parquet Issues**: 
+   - Ensure all parquet files exist and are accessible
+   - Verify that entity types in relationships are properly configured in the DbContext
+   - Check that foreign key property names match the actual entity properties
+   - Make sure navigation properties exist in the entity models when specified in relationships
 
 ## Benefits Over Manual Configuration
 
