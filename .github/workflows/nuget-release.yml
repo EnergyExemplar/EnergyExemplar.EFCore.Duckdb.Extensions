@@ -6,7 +6,7 @@ on:
     types:
       - completed
     branches:
-      - develop
+      - main
   workflow_dispatch:
     inputs:
       ci_run_id:
@@ -16,7 +16,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    # Only run if the CI workflow was successful and we're on the main branch
+    if: ${{ (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || github.event_name == 'workflow_dispatch' }}
     
     steps:
     - name: Checkout code
@@ -25,6 +26,7 @@ jobs:
         fetch-depth: 0  # Fetch all history for tags
     
     - name: Download Artifacts from CI
+      id: download-artifacts
       uses: dawidd6/action-download-artifact@v6
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -32,6 +34,19 @@ jobs:
         workflow_conclusion: success
         run_id: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ci_run_id || github.event.workflow_run.id }}
         name: nuget-packages
+        check_artifacts: true
+        search_artifacts: true
+    
+    - name: Verify CI release job ran successfully
+      run: |
+        # If the nuget-packages artifact doesn't exist, it means the release job didn't run or failed
+        if [ "${{ steps.download-artifacts.outputs.found_artifact }}" != "true" ]; then
+          echo "Error: Required artifact 'nuget-packages' not found. This indicates the release job in CI did not run successfully."
+          echo "This workflow should only run after a successful release from the CI workflow on the main branch."
+          exit 1
+        fi
+        
+        echo "✅ Found nuget-packages artifact, confirming the release job ran successfully."
     
     - name: Display structure of downloaded files (debug)
       run: ls -R
