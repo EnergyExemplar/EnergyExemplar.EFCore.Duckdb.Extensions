@@ -16,7 +16,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     
     steps:
     - name: Checkout code
@@ -38,13 +38,17 @@ jobs:
     
     - name: Verify NuGet packages exist
       run: |
-        # Change to the directory containing the packages
-        cd Source/nuget-packages || {
+        # Find the packages in the downloaded artifacts
+        if [ ! -d "nuget-packages" ]; then
           echo "Error: nuget-packages directory not found"
           echo "Available directories:"
           find . -type d -name "*nuget*" 2>/dev/null || echo "No nuget directories found"
+          echo "Current directory structure:"
+          ls -la
           exit 1
-        }
+        fi
+        
+        cd nuget-packages
         
         packages=$(find . -name "*.nupkg" -type f)
         if [ -z "$packages" ]; then

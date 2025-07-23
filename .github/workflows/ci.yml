@@ -99,6 +99,8 @@ jobs:
     name: Create Release Package
     runs-on: ubuntu-latest
     needs: [build-and-test, security-scan]
+    # Only run release when PR is merged into develop (push to develop after PR merge)
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
