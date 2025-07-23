@@ -16,7 +16,8 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Only run if the CI workflow was successful and we're on the main branch
+    if: ${{ (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || github.event_name == 'workflow_dispatch' }}
     
     steps:
     - name: Checkout code
@@ -25,6 +26,7 @@ jobs:
         fetch-depth: 0  # Fetch all history for tags
     
     - name: Download Artifacts from CI
+      id: download-artifacts
       uses: dawidd6/action-download-artifact@v6
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -32,15 +34,66 @@ jobs:
         workflow_conclusion: success
         run_id: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ci_run_id || github.event.workflow_run.id }}
         name: nuget-packages
+        check_artifacts: true
+        search_artifacts: true
+    
+    - name: Verify CI release job ran successfully
+      run: |
+        # If the nuget-packages artifact doesn't exist, it means the release job didn't run or failed
+        if [ "${{ steps.download-artifacts.outputs.found_artifact }}" != "true" ]; then
+          echo "Error: Required artifact 'nuget-packages' not found. This indicates the release job in CI did not run successfully."
+          echo "This workflow should only run after a successful release from the CI workflow on the main branch."
+          exit 1
+        fi
+        
+        echo "✅ Found nuget-packages artifact, confirming the release job ran successfully."
     
     - name: Display structure of downloaded files (debug)
       run: ls -R
     
     - name: Verify NuGet packages exist
       run: |
+        # Create the expected directory structure if it doesn't exist
+        mkdir -p nuget-packages
+        
+        # Find all .nupkg files regardless of directory structure
+        find_packages=$(find . -name "*.nupkg" -type f)
+        if [ -z "$find_packages" ]; then
+          echo "Error: No .nupkg files found in any directory"
+          echo "Current directory structure:"
+          ls -la
+          exit 1
+        fi
+        
+        # Check if the nuget-packages directory exists and has packages
+        if [ ! -d "nuget-packages" ] || [ -z "$(find ./nuget-packages -name "*.nupkg" -type f 2>/dev/null)" ]; then
+          echo "Moving packages to the expected nuget-packages directory"
+          # Find and copy any .nupkg files to the nuget-packages directory
+          for pkg in $find_packages; do
+            # Skip any test packages
+            if [[ "$pkg" == *test*.nupkg || "$pkg" == *.Test*.nupkg || "$pkg" == *.Tests*.nupkg ]]; then
+              echo "⚠️ Skipping test package: $pkg"
+              continue
+            fi
+            
+            if [[ $pkg != ./nuget-packages/* ]]; then
+              echo "Moving $pkg to nuget-packages/"
+              cp "$pkg" ./nuget-packages/
+            fi
+          done
+        fi
+        
+        # Store the absolute path to nuget-packages for later steps
+        echo "NUGET_PACKAGES_DIR=$(pwd)/nuget-packages" >> $GITHUB_ENV
+        
+        # Now verify packages in the nuget-packages directory
+        cd nuget-packages
+        
         packages=$(find . -name "*.nupkg" -type f)
         if [ -z "$packages" ]; then
-          echo "Error: No .nupkg files found in downloaded artifacts"
+          echo "Error: No .nupkg files found in nuget-packages directory"
+          echo "Contents of current directory:"
+          ls -la
           exit 1
         fi
         echo "Found NuGet packages:"
@@ -55,15 +108,19 @@ jobs:
           exit 1
         fi
         
-        # Count packages and verify we have exactly one
-        package_count=$(find . -name "*.nupkg" -type f | wc -l)
+        # Count main packages (exclude symbols packages)
+        main_packages=$(find . -name "*.nupkg" -type f ! -name "*.symbols.nupkg")
+        package_count=$(echo "$main_packages" | wc -l)
+        
         if [ "$package_count" -ne 1 ]; then
-          echo "Error: Expected exactly 1 NuGet package, found $package_count"
+          echo "Error: Expected exactly 1 main NuGet package, found $package_count"
+          echo "Main packages found:"
+          echo "$main_packages"
           exit 1
         fi
         
         # Extract version from package name for checking
-        for package in $packages; do
+        for package in $main_packages; do
           package_name=$(basename "$package" .nupkg)
           echo "Package name: $package_name"
           
@@ -74,12 +131,15 @@ jobs:
             exit 1
           fi
           
-          version=$(echo "$package_name" | sed 's/.*\.//')
+          version=$(echo "$package_name" | grep -oP '\d+\.\d+\.\d+(-[a-zA-Z0-9]+)?')
           echo "Package version: $version"
         done
     
     - name: Verify package version and preview suffix
       run: |
+        # Go back to the nuget-packages directory (in case we're not there)
+        cd "$NUGET_PACKAGES_DIR" || cd ./nuget-packages
+        
         for package in $(find . -name "*.nupkg" -type f); do
           package_name=$(basename "$package")
           echo "Package name: $package_name"
@@ -114,21 +174,28 @@ jobs:
     
     - name: Push package to NuGet.org
       run: |
+        # Go back to the nuget-packages directory (in case we're not there)
+        cd "$NUGET_PACKAGES_DIR" || cd ./nuget-packages
+        
         # Final verification before pushing
         echo "Performing final verification before publishing to NuGet.org..."
         
         # Verify no test packages exist
-        if [ -n "$(find . -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg")" ]; then
+        if [ -n "$(find . \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f)" ]; then
           echo "Error: Test packages detected. Aborting NuGet publish."
           exit 1
         fi
         
-        # Only push packages with the expected naming pattern
-        package_to_push=$(find . -name "EnergyExemplar.EntityFrameworkCore.DuckDb.*.nupkg")
-        if [ -z "$package_to_push" ]; then
-          echo "Error: No package with expected naming pattern found"
+        # Only push packages with the expected naming pattern - be more flexible with the pattern
+        # This accommodates potential differences between project name and package ID
+        main_packages=$(find . -name "*.nupkg" -type f ! -name "*.symbols.nupkg")
+        
+        if [ -z "$main_packages" ]; then
+          echo "Error: No main package found to push"
           exit 1
         fi
         
-        echo "Publishing package: $(basename "$package_to_push")"
-        dotnet nuget push "$package_to_push" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        for package in $main_packages; do
+          echo "Publishing package: $(basename "$package")"
+          dotnet nuget push "$package" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        done

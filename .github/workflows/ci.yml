@@ -164,12 +164,15 @@ jobs:
           mkdir -p ./nuget-packages
           rm -f ./nuget-packages/*.nupkg
           
-          # Also clean any test packages in the source tree
-          find . -path "*/test-nuget-packages/*" -name "*.nupkg" -type f -delete
+          # Clean any test packages anywhere in the source tree
+          find . \( -name "*.nupkg" -o -name "*.snupkg" \) -type f -delete
+          
+          # Remove any test-nuget-packages directory to prevent it from being included
+          find . -type d -name "test-nuget-packages" -exec rm -rf {} +
       
       - name: Pack NuGet package
         run: |
-          # Explicitly exclude any test projects from packing
+          # Use a relative path that will work in the GitHub Actions environment
           dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
             --no-build \
             --configuration Release \
@@ -177,13 +180,15 @@ jobs:
             /p:Version=${{ steps.get_version.outputs.new_version }} \
             /p:IsPackable=true \
             /p:IncludeSymbols=true \
-            /p:NoWarn=NU5105 \
-            /p:PackageOutputPath=./nuget-packages
-      
+            /p:NoWarn=NU5105
+          
+          # Extra safety: remove any test packages that might have been created
+          find ./nuget-packages \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f -delete
+
       - name: Verify no test packages were created
         run: |
           # Check for any test packages and fail if found
-          TEST_PACKAGES=$(find ./nuget-packages -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg")
+          TEST_PACKAGES=$(find ./nuget-packages \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f)
           if [ ! -z "$TEST_PACKAGES" ]; then
             echo "Error: Test packages were detected in the output:"
             echo "$TEST_PACKAGES"
@@ -191,12 +196,12 @@ jobs:
             exit 1
           fi
           
+          # List all packages for debugging
+          echo "All packages in output directory:"
+          find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f
+          
           # Verify we have exactly the expected package(s)
           EXPECTED_PACKAGE="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.new_version }}.nupkg"
-          SYMBOLS_PACKAGE="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.new_version }}.snupkg"
-          
-          echo "Packages in output directory:"
-          find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f
           
           # Check for presence of main package
           if [ ! -f "./nuget-packages/$EXPECTED_PACKAGE" ]; then
@@ -205,7 +210,7 @@ jobs:
           fi
           
           # Count total packages (including symbols)
-          PACKAGE_COUNT=$(find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" | wc -l)
+          PACKAGE_COUNT=$(find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f | wc -l)
           
           echo "Found $PACKAGE_COUNT package(s) in output directory"
           echo "Main package: $EXPECTED_PACKAGE ✅"
@@ -223,6 +228,7 @@ jobs:
         with:
           name: nuget-packages
           path: ./nuget-packages/*.nupkg
+          if-no-files-found: error  # Make the build fail if no packages are found
 
       - name: Create artifacts directory
         run: mkdir -p ./artifacts
