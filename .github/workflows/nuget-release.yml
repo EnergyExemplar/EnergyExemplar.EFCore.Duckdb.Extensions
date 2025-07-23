@@ -57,26 +57,30 @@ jobs:
       run: |
         for package in $(find . -name "*.nupkg" -type f); do
           package_name=$(basename "$package")
-          # A more robust way to extract version, handles versions like 1.2.3 or 1.2.3-preview
-          package_version=$(echo "$package_name" | grep -oP '(?<=\.v)\d+\.\d+\.\d+(?:-preview)?(?=\.nupkg)' || echo "$package_name" | grep -oP '\d+\.\d+\.\d+(?:-preview)?')
-          
           echo "Package name: $package_name"
+          
+          # Extract the full version including any suffix
+          # This handles formats like: PackageName.0.1.0-suffix.nupkg or PackageName.0.1.0.nupkg
+          package_version=$(echo "$package_name" | grep -oP '\d+\.\d+\.\d+(-[a-zA-Z0-9]+)?' || echo "unknown")
+          
           echo "Extracted version: $package_version"
           
-          if [ -z "$package_version" ]; then
+          if [ "$package_version" == "unknown" ]; then
             echo "Error: Could not extract version from package name: $package_name"
             exit 1
           fi
 
-          # Verify package has preview suffix
+          # Verify package has exactly the preview suffix
           if [[ "$package_version" != *-preview ]]; then
-            echo "Error: Package version does not have required -preview suffix"
+            echo "Error: Package version must have exactly the '-preview' suffix, found: $package_version"
+            echo "All packages must use the '-preview' suffix to indicate pre-release status."
             exit 1
           fi
           
           # Check if matching Git tag exists
           if ! git tag -l | grep -q "^$package_version$"; then
             echo "Error: No matching Git tag found for package version $package_version"
+            echo "The Git tag must exactly match the NuGet package version."
             exit 1
           fi
           
