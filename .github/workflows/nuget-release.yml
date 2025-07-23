@@ -42,4 +42,4 @@ jobs:
         echo "$packages"
     
     - name: Push package to NuGet.org
-      run: dotnet nuget push "**/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://int.nugettest.org --skip-duplicate
+      run: dotnet nuget push "**/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
