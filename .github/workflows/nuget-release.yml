@@ -38,9 +38,19 @@ jobs:
     
     - name: Verify NuGet packages exist
       run: |
+        # Change to the directory containing the packages
+        cd Source/nuget-packages || {
+          echo "Error: nuget-packages directory not found"
+          echo "Available directories:"
+          find . -type d -name "*nuget*" 2>/dev/null || echo "No nuget directories found"
+          exit 1
+        }
+        
         packages=$(find . -name "*.nupkg" -type f)
         if [ -z "$packages" ]; then
-          echo "Error: No .nupkg files found in downloaded artifacts"
+          echo "Error: No .nupkg files found in nuget-packages directory"
+          echo "Contents of current directory:"
+          ls -la
           exit 1
         fi
         echo "Found NuGet packages:"
@@ -55,15 +65,19 @@ jobs:
           exit 1
         fi
         
-        # Count packages and verify we have exactly one
-        package_count=$(find . -name "*.nupkg" -type f | wc -l)
+        # Count main packages (exclude symbols packages)
+        main_packages=$(find . -name "*.nupkg" -type f ! -name "*.symbols.nupkg")
+        package_count=$(echo "$main_packages" | wc -l)
+        
         if [ "$package_count" -ne 1 ]; then
-          echo "Error: Expected exactly 1 NuGet package, found $package_count"
+          echo "Error: Expected exactly 1 main NuGet package, found $package_count"
+          echo "Main packages found:"
+          echo "$main_packages"
           exit 1
         fi
         
         # Extract version from package name for checking
-        for package in $packages; do
+        for package in $main_packages; do
           package_name=$(basename "$package" .nupkg)
           echo "Package name: $package_name"
           
@@ -74,7 +88,7 @@ jobs:
             exit 1
           fi
           
-          version=$(echo "$package_name" | sed 's/.*\.//')
+          version=$(echo "$package_name" | grep -oP '\d+\.\d+\.\d+(-[a-zA-Z0-9]+)?')
           echo "Package version: $version"
         done
     

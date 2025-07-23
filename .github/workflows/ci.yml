@@ -161,8 +161,8 @@ jobs:
       - name: Clean workspace of existing packages
         run: |
           # Remove any existing packages in the output directory
-          mkdir -p ./nuget-packages
-          rm -f ./nuget-packages/*.nupkg
+          mkdir -p ./Source/nuget-packages
+          rm -f ./Source/nuget-packages/*.nupkg
           
           # Also clean any test packages in the source tree
           find . -path "*/test-nuget-packages/*" -name "*.nupkg" -type f -delete
@@ -173,17 +173,17 @@ jobs:
           dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
             --no-build \
             --configuration Release \
-            --output ./nuget-packages \
+            --output ./Source/nuget-packages \
             /p:Version=${{ steps.get_version.outputs.new_version }} \
             /p:IsPackable=true \
             /p:IncludeSymbols=true \
             /p:NoWarn=NU5105 \
-            /p:PackageOutputPath=./nuget-packages
+            /p:PackageOutputPath=./Source/nuget-packages
       
       - name: Verify no test packages were created
         run: |
           # Check for any test packages and fail if found
-          TEST_PACKAGES=$(find ./nuget-packages -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg")
+          TEST_PACKAGES=$(find ./Source/nuget-packages -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg")
           if [ ! -z "$TEST_PACKAGES" ]; then
             echo "Error: Test packages were detected in the output:"
             echo "$TEST_PACKAGES"
@@ -196,16 +196,16 @@ jobs:
           SYMBOLS_PACKAGE="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.new_version }}.snupkg"
           
           echo "Packages in output directory:"
-          find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f
+          find ./Source/nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f
           
           # Check for presence of main package
-          if [ ! -f "./nuget-packages/$EXPECTED_PACKAGE" ]; then
+          if [ ! -f "./Source/nuget-packages/$EXPECTED_PACKAGE" ]; then
             echo "Error: Main package not found: $EXPECTED_PACKAGE"
             exit 1
           fi
           
           # Count total packages (including symbols)
-          PACKAGE_COUNT=$(find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" | wc -l)
+          PACKAGE_COUNT=$(find ./Source/nuget-packages -name "*.nupkg" -o -name "*.snupkg" | wc -l)
           
           echo "Found $PACKAGE_COUNT package(s) in output directory"
           echo "Main package: $EXPECTED_PACKAGE ✅"
@@ -222,7 +222,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages
-          path: ./nuget-packages/*.nupkg
+          path: ./Source/nuget-packages/*.nupkg
 
       - name: Create artifacts directory
         run: mkdir -p ./artifacts
