@@ -55,6 +55,12 @@ jobs:
           echo "Moving packages to the expected nuget-packages directory"
           # Find and copy any .nupkg files to the nuget-packages directory
           for pkg in $find_packages; do
+            # Skip any test packages
+            if [[ "$pkg" == *test*.nupkg || "$pkg" == *.Test*.nupkg || "$pkg" == *.Tests*.nupkg ]]; then
+              echo "⚠️ Skipping test package: $pkg"
+              continue
+            fi
+            
             if [[ $pkg != ./nuget-packages/* ]]; then
               echo "Moving $pkg to nuget-packages/"
               cp "$pkg" ./nuget-packages/
