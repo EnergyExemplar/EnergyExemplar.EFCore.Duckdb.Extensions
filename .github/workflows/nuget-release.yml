@@ -45,6 +45,13 @@ jobs:
         fi
         echo "Found NuGet packages:"
         echo "$packages"
+        
+        # Extract version from package name for checking
+        for package in $packages; do
+          package_name=$(basename "$package" .nupkg)
+          version=$(echo "$package_name" | sed 's/.*\.//')
+          echo "Package version: $version"
+        done
     
     - name: Verify package version and preview suffix
       run: |
