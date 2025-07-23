@@ -119,8 +119,8 @@ jobs:
           LATEST_TAG=$(git tag -l "0.1.*-preview" | sort -V | tail -n1)
 
           if [ -z "$LATEST_TAG" ]; then
-            # No tags exist, start with 0.1.0-preview
-            NEW_VERSION="0.1.0-preview"
+            # No tags exist, start with 0.1.1-preview
+            NEW_VERSION="0.1.1-preview"
           else
             # Extract patch version, increment, and append -preview
             PATCH_VERSION=$(echo $LATEST_TAG | cut -d'.' -f3 | cut -d'-' -f1)
