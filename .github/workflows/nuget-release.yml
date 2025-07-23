@@ -68,6 +68,9 @@ jobs:
           done
         fi
         
+        # Store the absolute path to nuget-packages for later steps
+        echo "NUGET_PACKAGES_DIR=$(pwd)/nuget-packages" >> $GITHUB_ENV
+        
         # Now verify packages in the nuget-packages directory
         cd nuget-packages
         
@@ -119,6 +122,9 @@ jobs:
     
     - name: Verify package version and preview suffix
       run: |
+        # Go back to the nuget-packages directory (in case we're not there)
+        cd "$NUGET_PACKAGES_DIR" || cd ./nuget-packages
+        
         for package in $(find . -name "*.nupkg" -type f); do
           package_name=$(basename "$package")
           echo "Package name: $package_name"
@@ -153,21 +159,28 @@ jobs:
     
     - name: Push package to NuGet.org
       run: |
+        # Go back to the nuget-packages directory (in case we're not there)
+        cd "$NUGET_PACKAGES_DIR" || cd ./nuget-packages
+        
         # Final verification before pushing
         echo "Performing final verification before publishing to NuGet.org..."
         
         # Verify no test packages exist
-        if [ -n "$(find . -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg")" ]; then
+        if [ -n "$(find . \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f)" ]; then
           echo "Error: Test packages detected. Aborting NuGet publish."
           exit 1
         fi
         
-        # Only push packages with the expected naming pattern
-        package_to_push=$(find . -name "EnergyExemplar.EntityFrameworkCore.DuckDb.*.nupkg")
-        if [ -z "$package_to_push" ]; then
-          echo "Error: No package with expected naming pattern found"
+        # Only push packages with the expected naming pattern - be more flexible with the pattern
+        # This accommodates potential differences between project name and package ID
+        main_packages=$(find . -name "*.nupkg" -type f ! -name "*.symbols.nupkg")
+        
+        if [ -z "$main_packages" ]; then
+          echo "Error: No main package found to push"
           exit 1
         fi
         
-        echo "Publishing package: $(basename "$package_to_push")"
-        dotnet nuget push "$package_to_push" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        for package in $main_packages; do
+          echo "Publishing package: $(basename "$package")"
+          dotnet nuget push "$package" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+        done

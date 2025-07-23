@@ -165,15 +165,15 @@ jobs:
           rm -f ./nuget-packages/*.nupkg
           
           # Clean any test packages anywhere in the source tree
-          find . -name "*.nupkg" -o -name "*.snupkg" -type f -delete
+          find . \( -name "*.nupkg" -o -name "*.snupkg" \) -type f -delete
           
           # Remove any test-nuget-packages directory to prevent it from being included
           find . -type d -name "test-nuget-packages" -exec rm -rf {} +
       
       - name: Pack NuGet package
         run: |
-          # Use the absolute path to the main project only
-          dotnet pack d:/githubcode/EnergyExemplar.EFCore.Duckdb.Extensions/Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
+          # Use a relative path that will work in the GitHub Actions environment
+          dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
             --no-build \
             --configuration Release \
             --output ./nuget-packages \
@@ -183,12 +183,12 @@ jobs:
             /p:NoWarn=NU5105
           
           # Extra safety: remove any test packages that might have been created
-          find ./nuget-packages -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" -type f -delete
+          find ./nuget-packages \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f -delete
 
       - name: Verify no test packages were created
         run: |
           # Check for any test packages and fail if found
-          TEST_PACKAGES=$(find ./nuget-packages -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" -type f)
+          TEST_PACKAGES=$(find ./nuget-packages \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f)
           if [ ! -z "$TEST_PACKAGES" ]; then
             echo "Error: Test packages were detected in the output:"
             echo "$TEST_PACKAGES"
