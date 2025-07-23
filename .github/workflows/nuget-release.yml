@@ -19,6 +19,11 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for tags
+    
     - name: Download Artifacts from CI
       uses: dawidd6/action-download-artifact@v6
       with:
@@ -40,6 +45,43 @@ jobs:
         fi
         echo "Found NuGet packages:"
         echo "$packages"
+        
+        # Extract version from package name for checking
+        for package in $packages; do
+          package_name=$(basename "$package" .nupkg)
+          version=$(echo "$package_name" | sed 's/.*\.//')
+          echo "Package version: $version"
+        done
+    
+    - name: Verify package version and preview suffix
+      run: |
+        for package in $(find . -name "*.nupkg" -type f); do
+          package_name=$(basename "$package")
+          # A more robust way to extract version, handles versions like 1.2.3 or 1.2.3-preview
+          package_version=$(echo "$package_name" | grep -oP '(?<=\.v)\d+\.\d+\.\d+(?:-preview)?(?=\.nupkg)' || echo "$package_name" | grep -oP '\d+\.\d+\.\d+(?:-preview)?')
+          
+          echo "Package name: $package_name"
+          echo "Extracted version: $package_version"
+          
+          if [ -z "$package_version" ]; then
+            echo "Error: Could not extract version from package name: $package_name"
+            exit 1
+          fi
+
+          # Verify package has preview suffix
+          if [[ "$package_version" != *-preview ]]; then
+            echo "Error: Package version does not have required -preview suffix"
+            exit 1
+          fi
+          
+          # Check if matching Git tag exists
+          if ! git tag -l | grep -q "^$package_version$"; then
+            echo "Error: No matching Git tag found for package version $package_version"
+            exit 1
+          fi
+          
+          echo "✅ Verification passed: Package version $package_version matches Git tag and has -preview suffix"
+        done
     
     - name: Push package to NuGet.org
       run: dotnet nuget push "**/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
