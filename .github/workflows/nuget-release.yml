@@ -46,9 +46,34 @@ jobs:
         echo "Found NuGet packages:"
         echo "$packages"
         
+        # Check for test packages and fail if found
+        test_packages=$(find . -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg")
+        if [ ! -z "$test_packages" ]; then
+          echo "Error: Test packages were detected in the artifacts:"
+          echo "$test_packages"
+          echo "Test packages should not be published to NuGet.org."
+          exit 1
+        fi
+        
+        # Count packages and verify we have exactly one
+        package_count=$(find . -name "*.nupkg" -type f | wc -l)
+        if [ "$package_count" -ne 1 ]; then
+          echo "Error: Expected exactly 1 NuGet package, found $package_count"
+          exit 1
+        fi
+        
         # Extract version from package name for checking
         for package in $packages; do
           package_name=$(basename "$package" .nupkg)
+          echo "Package name: $package_name"
+          
+          # Verify package follows expected naming convention
+          if [[ ! "$package_name" =~ ^EnergyExemplar\.EntityFrameworkCore\.DuckDb\.[0-9]+\.[0-9]+\.[0-9]+-preview$ ]]; then
+            echo "Error: Package name doesn't match expected format (EnergyExemplar.EntityFrameworkCore.DuckDb.x.y.z-preview)"
+            echo "Found: $package_name"
+            exit 1
+          fi
+          
           version=$(echo "$package_name" | sed 's/.*\.//')
           echo "Package version: $version"
         done
@@ -57,26 +82,30 @@ jobs:
       run: |
         for package in $(find . -name "*.nupkg" -type f); do
           package_name=$(basename "$package")
-          # A more robust way to extract version, handles versions like 1.2.3 or 1.2.3-preview
-          package_version=$(echo "$package_name" | grep -oP '(?<=\.v)\d+\.\d+\.\d+(?:-preview)?(?=\.nupkg)' || echo "$package_name" | grep -oP '\d+\.\d+\.\d+(?:-preview)?')
-          
           echo "Package name: $package_name"
+          
+          # Extract the full version including any suffix
+          # This handles formats like: PackageName.0.1.0-suffix.nupkg or PackageName.0.1.0.nupkg
+          package_version=$(echo "$package_name" | grep -oP '\d+\.\d+\.\d+(-[a-zA-Z0-9]+)?' || echo "unknown")
+          
           echo "Extracted version: $package_version"
           
-          if [ -z "$package_version" ]; then
+          if [ "$package_version" == "unknown" ]; then
             echo "Error: Could not extract version from package name: $package_name"
             exit 1
           fi
 
-          # Verify package has preview suffix
+          # Verify package has exactly the preview suffix
           if [[ "$package_version" != *-preview ]]; then
-            echo "Error: Package version does not have required -preview suffix"
+            echo "Error: Package version must have exactly the '-preview' suffix, found: $package_version"
+            echo "All packages must use the '-preview' suffix to indicate pre-release status."
             exit 1
           fi
           
           # Check if matching Git tag exists
           if ! git tag -l | grep -q "^$package_version$"; then
             echo "Error: No matching Git tag found for package version $package_version"
+            echo "The Git tag must exactly match the NuGet package version."
             exit 1
           fi
           
@@ -84,4 +113,22 @@ jobs:
         done
     
     - name: Push package to NuGet.org
-      run: dotnet nuget push "**/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+      run: |
+        # Final verification before pushing
+        echo "Performing final verification before publishing to NuGet.org..."
+        
+        # Verify no test packages exist
+        if [ -n "$(find . -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg")" ]; then
+          echo "Error: Test packages detected. Aborting NuGet publish."
+          exit 1
+        fi
+        
+        # Only push packages with the expected naming pattern
+        package_to_push=$(find . -name "EnergyExemplar.EntityFrameworkCore.DuckDb.*.nupkg")
+        if [ -z "$package_to_push" ]; then
+          echo "Error: No package with expected naming pattern found"
+          exit 1
+        fi
+        
+        echo "Publishing package: $(basename "$package_to_push")"
+        dotnet nuget push "$package_to_push" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

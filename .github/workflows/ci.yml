@@ -157,9 +157,66 @@ jobs:
       - name: Build Release
         run: dotnet build --no-restore --configuration Release
         working-directory: ./Source
+
+      - name: Clean workspace of existing packages
+        run: |
+          # Remove any existing packages in the output directory
+          mkdir -p ./nuget-packages
+          rm -f ./nuget-packages/*.nupkg
+          
+          # Also clean any test packages in the source tree
+          find . -path "*/test-nuget-packages/*" -name "*.nupkg" -type f -delete
       
       - name: Pack NuGet package
-        run: dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj --no-build --configuration Release --output ./nuget-packages /p:Version=${{ steps.get_version.outputs.new_version }}
+        run: |
+          # Explicitly exclude any test projects from packing
+          dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
+            --no-build \
+            --configuration Release \
+            --output ./nuget-packages \
+            /p:Version=${{ steps.get_version.outputs.new_version }} \
+            /p:IsPackable=true \
+            /p:IncludeSymbols=true \
+            /p:NoWarn=NU5105 \
+            /p:PackageOutputPath=./nuget-packages
+      
+      - name: Verify no test packages were created
+        run: |
+          # Check for any test packages and fail if found
+          TEST_PACKAGES=$(find ./nuget-packages -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg")
+          if [ ! -z "$TEST_PACKAGES" ]; then
+            echo "Error: Test packages were detected in the output:"
+            echo "$TEST_PACKAGES"
+            echo "Test packages should not be included in the release."
+            exit 1
+          fi
+          
+          # Verify we have exactly the expected package(s)
+          EXPECTED_PACKAGE="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.new_version }}.nupkg"
+          SYMBOLS_PACKAGE="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.new_version }}.snupkg"
+          
+          echo "Packages in output directory:"
+          find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f
+          
+          # Check for presence of main package
+          if [ ! -f "./nuget-packages/$EXPECTED_PACKAGE" ]; then
+            echo "Error: Main package not found: $EXPECTED_PACKAGE"
+            exit 1
+          fi
+          
+          # Count total packages (including symbols)
+          PACKAGE_COUNT=$(find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" | wc -l)
+          
+          echo "Found $PACKAGE_COUNT package(s) in output directory"
+          echo "Main package: $EXPECTED_PACKAGE ✅"
+          
+          # Allow 1-2 packages (main + optional symbols)
+          if [ "$PACKAGE_COUNT" -lt 1 ] || [ "$PACKAGE_COUNT" -gt 2 ]; then
+            echo "Error: Expected 1-2 packages (main + optional symbols), found $PACKAGE_COUNT"
+            exit 1
+          fi
+          
+          echo "✅ Package verification successful - no test packages found"
       
       - name: Upload NuGet artifacts
         uses: actions/upload-artifact@v4
