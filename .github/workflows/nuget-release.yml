@@ -38,16 +38,31 @@ jobs:
     
     - name: Verify NuGet packages exist
       run: |
-        # Find the packages in the downloaded artifacts
-        if [ ! -d "nuget-packages" ]; then
-          echo "Error: nuget-packages directory not found"
-          echo "Available directories:"
-          find . -type d -name "*nuget*" 2>/dev/null || echo "No nuget directories found"
+        # Create the expected directory structure if it doesn't exist
+        mkdir -p nuget-packages
+        
+        # Find all .nupkg files regardless of directory structure
+        find_packages=$(find . -name "*.nupkg" -type f)
+        if [ -z "$find_packages" ]; then
+          echo "Error: No .nupkg files found in any directory"
           echo "Current directory structure:"
           ls -la
           exit 1
         fi
         
+        # Check if the nuget-packages directory exists and has packages
+        if [ ! -d "nuget-packages" ] || [ -z "$(find ./nuget-packages -name "*.nupkg" -type f 2>/dev/null)" ]; then
+          echo "Moving packages to the expected nuget-packages directory"
+          # Find and copy any .nupkg files to the nuget-packages directory
+          for pkg in $find_packages; do
+            if [[ $pkg != ./nuget-packages/* ]]; then
+              echo "Moving $pkg to nuget-packages/"
+              cp "$pkg" ./nuget-packages/
+            fi
+          done
+        fi
+        
+        # Now verify packages in the nuget-packages directory
         cd nuget-packages
         
         packages=$(find . -name "*.nupkg" -type f)

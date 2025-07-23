@@ -166,6 +166,8 @@ jobs:
           
           # Also clean any test packages in the source tree
           find . -path "*/test-nuget-packages/*" -name "*.nupkg" -type f -delete
+          # Remove the test-nuget-packages directory entirely to prevent it from being included
+          rm -rf ./test-nuget-packages
       
       - name: Pack NuGet package
         run: |
@@ -222,6 +224,7 @@ jobs:
         with:
           name: nuget-packages
           path: ./nuget-packages/*.nupkg
+          if-no-files-found: error  # Make the build fail if no packages are found
 
       - name: Create artifacts directory
         run: mkdir -p ./artifacts
