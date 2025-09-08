@@ -1,4 +1,4 @@
-name: NuGet Release
+name: Package Release (NuGet & GitHub)
 
 on:
   workflow_run:
@@ -172,17 +172,17 @@ jobs:
           echo "✅ Verification passed: Package version $package_version matches Git tag and has -preview suffix"
         done
     
-    - name: Push package to NuGet.org
+    - name: Push packages to both registries
       run: |
         # Go back to the nuget-packages directory (in case we're not there)
         cd "$NUGET_PACKAGES_DIR" || cd ./nuget-packages
         
-        # Final verification before pushing
-        echo "Performing final verification before publishing to NuGet.org..."
+        # Final verification before publishing
+        echo "Performing final verification before publishing..."
         
         # Verify no test packages exist
         if [ -n "$(find . \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f)" ]; then
-          echo "Error: Test packages detected. Aborting NuGet publish."
+          echo "Error: Test packages detected. Aborting publish."
           exit 1
         fi
         
@@ -195,7 +195,76 @@ jobs:
           exit 1
         fi
         
+        # Track publishing results
+        github_publish_success=false
+        nuget_publish_success=false
+        
+        # Publish to both registries
         for package in $main_packages; do
+          echo "========================================="
           echo "Publishing package: $(basename "$package")"
-          dotnet nuget push "$package" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+          echo "========================================="
+          
+          # Publish to GitHub Packages (always available via GITHUB_TOKEN)
+          echo ""
+          echo "📦 Publishing to GitHub Packages..."
+          if dotnet nuget push "$package" \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --source https://nuget.pkg.github.com/EnergyExemplar/index.json \
+            --skip-duplicate; then
+            echo "✅ Successfully published to GitHub Packages"
+            github_publish_success=true
+          else
+            echo "⚠️ Failed to publish to GitHub Packages (will continue)"
+          fi
+          
+          # Publish to NuGet.org (if API key is available)
+          echo ""
+          if [ -n "${{ secrets.NUGET_API_KEY }}" ]; then
+            echo "📦 Publishing to NuGet.org..."
+            if dotnet nuget push "$package" \
+              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate; then
+              echo "✅ Successfully published to NuGet.org"
+              nuget_publish_success=true
+            else
+              echo "⚠️ Failed to publish to NuGet.org (will continue)"
+            fi
+          else
+            echo "⚠️ NUGET_API_KEY not found, skipping NuGet.org publish"
+            echo "   Package will only be available on GitHub Packages"
+          fi
         done
+        
+        # Summary and final status
+        echo ""
+        echo "========================================="
+        echo "📊 Publishing Summary"
+        echo "========================================="
+        
+        if [ "$github_publish_success" = true ]; then
+          echo "✅ GitHub Packages: Published successfully"
+        else
+          echo "❌ GitHub Packages: Failed to publish"
+        fi
+        
+        if [ -n "${{ secrets.NUGET_API_KEY }}" ]; then
+          if [ "$nuget_publish_success" = true ]; then
+            echo "✅ NuGet.org: Published successfully"
+          else
+            echo "❌ NuGet.org: Failed to publish"
+          fi
+        else
+          echo "⚠️ NuGet.org: Skipped (no API key)"
+        fi
+        
+        # Fail the workflow only if both registries failed
+        if [ "$github_publish_success" = false ] && [ "$nuget_publish_success" = false ]; then
+          echo ""
+          echo "❌ ERROR: Failed to publish to any registry"
+          exit 1
+        fi
+        
+        echo ""
+        echo "✅ Package publishing completed successfully"
