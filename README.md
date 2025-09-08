@@ -120,6 +120,58 @@ var options = new DbContextOptionsBuilder<MyDbContext>()
     .Options;
 ```
 
+### 6. Dynamic Path Resolution for Multiple Environments
+
+For applications that need to work across different environments (dev, test, prod) with different file paths:
+
+```csharp
+using EnergyExemplar.EntityFrameworkCore.DuckDb.Configuration;
+
+// Environment-aware path resolution
+var options = new DbContextOptionsBuilder<MyDbContext>()
+    .UseDuckDbWithEnvironmentPaths("prod", config =>
+    {
+        config.AddTableWithTemplate<Customer>("s3://data-{env}/customers/{Date:yyyy-MM-dd}.parquet", "customers")
+              .AddTableWithTemplate<Order>("s3://data-{env}/orders/{Date:yyyy-MM-dd}.parquet", "orders")
+              .AddRelationship<Customer, Order>("CustomerId", "Id", "Orders", "Customer");
+    }, customVariables: new Dictionary<string, string> 
+    {
+        ["region"] = "us-east-1",
+        ["bucket"] = "my-data-lake"
+    })
+    .Options;
+```
+
+#### Custom Path Resolver
+
+```csharp
+// Create a custom path resolver
+var pathResolver = new EnvironmentParquetPathResolver("dev", new Dictionary<string, string>
+{
+    ["basePath"] = Environment.GetEnvironmentVariable("DATA_PATH") ?? "C:/data",
+    ["region"] = "us-west-2"
+});
+
+var options = new DbContextOptionsBuilder<MyDbContext>()
+    .UseDuckDbWithPathResolver(pathResolver, config =>
+    {
+        config.AddTableWithTemplate<Customer>("{basePath}/{env}/{region}/customers.parquet")
+              .AddTableWithTemplate<Order>("{basePath}/{env}/{region}/orders.parquet")
+              .AddRelationship<Customer, Order>("CustomerId", "Id", "Orders", "Customer");
+    })
+    .Options;
+```
+
+#### Supported Template Placeholders
+
+- `{env}` - Environment name (dev, test, prod, etc.)
+- `{EntityName}` - Entity class name (Customer, Order, etc.)
+- `{Date:yyyy-MM-dd}` - Current date in specified format
+- `{Date:yyyy-MM}` - Current year-month
+- `{Date:yyyy}` - Current year
+- `{Config:KeyName}` - Value from IConfiguration
+- `{CustomVariable}` - Any custom variable you define
+
 #### DbContext Configuration for Multi-Parquet
 
 ```csharp

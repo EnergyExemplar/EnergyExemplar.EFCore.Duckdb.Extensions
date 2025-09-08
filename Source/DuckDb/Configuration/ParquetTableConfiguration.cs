@@ -146,6 +146,12 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb.Configuration
         public List<ParquetRelationshipConfiguration> Relationships { get; set; } = new();
 
         /// <summary>
+        /// Optional path resolver for dynamic path resolution.
+        /// When set, path templates can be used instead of absolute paths.
+        /// </summary>
+        public IParquetPathResolver? PathResolver { get; set; }
+
+        /// <summary>
         /// Adds a parquet table configuration.
         /// </summary>
         public MultiParquetConfiguration AddTable<TEntity>(string parquetFilePath, string? tableName = null, string? schema = null)
@@ -157,6 +163,38 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb.Configuration
                 EntityType = typeof(TEntity),
                 Schema = schema
             });
+            return this;
+        }
+
+        /// <summary>
+        /// Adds a parquet table configuration using a path template.
+        /// The template will be resolved using the configured PathResolver.
+        /// </summary>
+        /// <typeparam name="TEntity">The entity type</typeparam>
+        /// <param name="pathTemplate">Path template with placeholders like {env}, {EntityName}, etc.</param>
+        /// <param name="tableName">Optional table name override</param>
+        /// <param name="schema">Optional schema name</param>
+        /// <param name="environment">Optional environment override for this specific table</param>
+        /// <returns>The configuration instance for method chaining</returns>
+        public MultiParquetConfiguration AddTableWithTemplate<TEntity>(
+            string pathTemplate, 
+            string? tableName = null, 
+            string? schema = null,
+            string? environment = null)
+        {
+            var resolvedPath = PathResolver?.ResolvePath<TEntity>(pathTemplate, environment) ?? pathTemplate;
+            return AddTable<TEntity>(resolvedPath, tableName, schema);
+        }
+
+        /// <summary>
+        /// Sets the path resolver for this configuration.
+        /// This enables template-based path resolution.
+        /// </summary>
+        /// <param name="pathResolver">The path resolver to use</param>
+        /// <returns>The configuration instance for method chaining</returns>
+        public MultiParquetConfiguration WithPathResolver(IParquetPathResolver pathResolver)
+        {
+            PathResolver = pathResolver;
             return this;
         }
 

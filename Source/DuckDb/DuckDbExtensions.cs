@@ -146,6 +146,47 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb
             return builder.UseDuckDbOnMultipleParquet(configuration, noTracking, sqliteOptionsAction);
         }
 
+        /// <summary>
+        /// Connect to multiple parquet files with dynamic path resolution as a DuckDB data source.
+        /// This allows for environment-specific file paths using templates.
+        /// </summary>
+        public static DbContextOptionsBuilder UseDuckDbWithPathResolver(
+            this DbContextOptionsBuilder builder,
+            IParquetPathResolver pathResolver,
+            Action<MultiParquetConfiguration> configureConfiguration,
+            bool noTracking = true,
+            Action<Microsoft.EntityFrameworkCore.Infrastructure.SqliteDbContextOptionsBuilder>? sqliteOptionsAction = null)
+        {
+            ArgumentNullException.ThrowIfNull(builder);
+            ArgumentNullException.ThrowIfNull(pathResolver);
+            ArgumentNullException.ThrowIfNull(configureConfiguration);
+
+            var configuration = new MultiParquetConfiguration();
+            configuration.WithPathResolver(pathResolver);
+            configureConfiguration(configuration);
+            return builder.UseDuckDbOnMultipleParquet(configuration, noTracking, sqliteOptionsAction);
+        }
+
+        /// <summary>
+        /// Connect to multiple parquet files with environment-based path resolution as a DuckDB data source.
+        /// This is a convenience method that creates an EnvironmentParquetPathResolver.
+        /// </summary>
+        public static DbContextOptionsBuilder UseDuckDbWithEnvironmentPaths(
+            this DbContextOptionsBuilder builder,
+            string defaultEnvironment,
+            Action<MultiParquetConfiguration> configureConfiguration,
+            Dictionary<string, string>? customVariables = null,
+            bool noTracking = true,
+            Action<Microsoft.EntityFrameworkCore.Infrastructure.SqliteDbContextOptionsBuilder>? sqliteOptionsAction = null)
+        {
+            ArgumentNullException.ThrowIfNull(builder);
+            ArgumentNullException.ThrowIfNull(defaultEnvironment);
+            ArgumentNullException.ThrowIfNull(configureConfiguration);
+
+            var pathResolver = new EnvironmentParquetPathResolver(defaultEnvironment, customVariables);
+            return builder.UseDuckDbWithPathResolver(pathResolver, configureConfiguration, noTracking, sqliteOptionsAction);
+        }
+
         // internal shared config helper
         private static DbContextOptionsBuilder Configure(DbContextOptionsBuilder b, DuckDbSource src, bool noTrack,
             Action<Microsoft.EntityFrameworkCore.Infrastructure.SqliteDbContextOptionsBuilder>? sqliteOptionsAction)
