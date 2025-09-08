@@ -28,7 +28,8 @@ namespace EnergyExemplar.Extensions.DuckDb.Internals
             DuckSqlRules.GlobToLike,
             DuckSqlRules.RandomFuncAlias,
             DuckSqlRules.BitwiseAndToLogicalAnd,
-            DuckSqlRules.BitwiseOrToLogicalOr
+            DuckSqlRules.BitwiseOrToLogicalOr,
+            DuckSqlRules.LimitMinusOneToOffset
         });
     }
 }

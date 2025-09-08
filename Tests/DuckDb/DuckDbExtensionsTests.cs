@@ -315,6 +315,44 @@ namespace Tests.DuckDb
         }
 
         [Test]
+        public void Interceptor_Should_Handle_Skip_Without_Take()
+        {
+            // Test for issue #19: Skip without Take generates LIMIT -1 OFFSET N
+            // which needs to be rewritten to just OFFSET N for DuckDB
+            var parquetPath = GetParquetPath();
+            var builder = new DbContextOptionsBuilder<ParquetContext>();
+            builder.UseDuckDbOnParquet(parquetPath);
+
+            using var ctx = new ParquetContext(builder.Options);
+
+            // Get total count first
+            var totalCount = ctx.Items.Count();
+            
+            // Skip some items without specifying Take
+            // This should generate LIMIT -1 OFFSET 3 in SQLite
+            // and be rewritten to OFFSET 3 for DuckDB
+            var skipCount = 3;
+            var itemsAfterSkip = ctx.Items
+                .OrderBy(i => i.ID)
+                .Skip(skipCount)
+                .ToList();
+
+            // Verify we got the correct number of items
+            Assert.That(itemsAfterSkip.Count, Is.EqualTo(Math.Max(0, totalCount - skipCount)));
+
+            // Verify the skipped items are indeed different from the first items
+            if (totalCount > skipCount)
+            {
+                var firstItems = ctx.Items.OrderBy(i => i.ID).Take(skipCount).ToList();
+                var firstIds = firstItems.Select(i => i.ID).ToHashSet();
+                var skippedIds = itemsAfterSkip.Select(i => i.ID).ToHashSet();
+                
+                // Should have no overlap
+                Assert.That(firstIds.Overlaps(skippedIds), Is.False);
+            }
+        }
+
+        [Test]
         public void Interceptor_Should_Handle_FirstOrDefault_SingleOrDefault()
         {
             var parquetPath = GetParquetPath();
