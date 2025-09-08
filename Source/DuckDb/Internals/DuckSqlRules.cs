@@ -38,5 +38,10 @@ namespace EnergyExemplar.Extensions.DuckDb.Internals
             "BitwiseOr→LogicalOr",
             s => s.Contains("|"),
             s => Regex.Replace(s, @"\)\s*\|\s*\(", ") OR (", RegexOptions.Multiline));
+
+        internal static readonly SqlRewriteRule LimitMinusOneToOffset = new(
+            "LimitMinusOne→Offset",
+            s => Regex.IsMatch(s, @"LIMIT\s+-1\s+OFFSET\s+\d+", RegexOptions.IgnoreCase),
+            s => Regex.Replace(s, @"LIMIT\s+-1\s+OFFSET\s+(\d+)", "OFFSET $1", RegexOptions.IgnoreCase));
     }
 }
