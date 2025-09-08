@@ -11,9 +11,9 @@
     
     <!-- NuGet Package Properties -->
     <PackageId>EnergyExemplar.EntityFrameworkCore.DuckDb</PackageId>
-    <Version>0.1.0-preview</Version>
-    <AssemblyVersion>0.1.0.0</AssemblyVersion>
-    <FileVersion>0.1.0.0</FileVersion>
+    <Version>0.1.1-preview</Version>
+    <AssemblyVersion>0.1.1.0</AssemblyVersion>
+    <FileVersion>0.1.1.0</FileVersion>
     <Title>DuckDB Entity Framework Core Integration</Title>
     <Description>Seamless integration between Entity Framework Core and DuckDB, providing significant performance improvements for analytical queries with a simple, developer-friendly API.</Description>
     <Authors>Energy Exemplar Pty Ltd</Authors>
@@ -38,6 +38,7 @@
     <PackageReference Include="DuckDB.NET.Data.Full" Version="1.2.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.6" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.6" />
   </ItemGroup>
 
   <ItemGroup>

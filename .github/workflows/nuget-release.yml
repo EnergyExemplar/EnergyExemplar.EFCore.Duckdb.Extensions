@@ -1,4 +1,4 @@
-name: NuGet Release
+name: Package Release (NuGet & GitHub)
 
 on:
   workflow_run:
@@ -16,10 +16,17 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Only run if the CI workflow was successful and we're on the main branch
+    if: ${{ (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') || github.event_name == 'workflow_dispatch' }}
     
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for tags
+    
     - name: Download Artifacts from CI
+      id: download-artifacts
       uses: dawidd6/action-download-artifact@v6
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -27,19 +34,237 @@ jobs:
         workflow_conclusion: success
         run_id: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ci_run_id || github.event.workflow_run.id }}
         name: nuget-packages
+        check_artifacts: true
+        search_artifacts: true
+    
+    - name: Verify CI release job ran successfully
+      run: |
+        # If the nuget-packages artifact doesn't exist, it means the release job didn't run or failed
+        if [ "${{ steps.download-artifacts.outputs.found_artifact }}" != "true" ]; then
+          echo "Error: Required artifact 'nuget-packages' not found. This indicates the release job in CI did not run successfully."
+          echo "This workflow should only run after a successful release from the CI workflow on the main branch."
+          exit 1
+        fi
+        
+        echo "✅ Found nuget-packages artifact, confirming the release job ran successfully."
     
     - name: Display structure of downloaded files (debug)
       run: ls -R
     
     - name: Verify NuGet packages exist
       run: |
+        # Create the expected directory structure if it doesn't exist
+        mkdir -p nuget-packages
+        
+        # Find all .nupkg files regardless of directory structure
+        find_packages=$(find . -name "*.nupkg" -type f)
+        if [ -z "$find_packages" ]; then
+          echo "Error: No .nupkg files found in any directory"
+          echo "Current directory structure:"
+          ls -la
+          exit 1
+        fi
+        
+        # Check if the nuget-packages directory exists and has packages
+        if [ ! -d "nuget-packages" ] || [ -z "$(find ./nuget-packages -name "*.nupkg" -type f 2>/dev/null)" ]; then
+          echo "Moving packages to the expected nuget-packages directory"
+          # Find and copy any .nupkg files to the nuget-packages directory
+          for pkg in $find_packages; do
+            # Skip any test packages
+            if [[ "$pkg" == *test*.nupkg || "$pkg" == *.Test*.nupkg || "$pkg" == *.Tests*.nupkg ]]; then
+              echo "⚠️ Skipping test package: $pkg"
+              continue
+            fi
+            
+            if [[ $pkg != ./nuget-packages/* ]]; then
+              echo "Moving $pkg to nuget-packages/"
+              cp "$pkg" ./nuget-packages/
+            fi
+          done
+        fi
+        
+        # Store the absolute path to nuget-packages for later steps
+        echo "NUGET_PACKAGES_DIR=$(pwd)/nuget-packages" >> $GITHUB_ENV
+        
+        # Now verify packages in the nuget-packages directory
+        cd nuget-packages
+        
         packages=$(find . -name "*.nupkg" -type f)
         if [ -z "$packages" ]; then
-          echo "Error: No .nupkg files found in downloaded artifacts"
+          echo "Error: No .nupkg files found in nuget-packages directory"
+          echo "Contents of current directory:"
+          ls -la
           exit 1
         fi
         echo "Found NuGet packages:"
         echo "$packages"
+        
+        # Check for test packages and fail if found
+        test_packages=$(find . -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg")
+        if [ ! -z "$test_packages" ]; then
+          echo "Error: Test packages were detected in the artifacts:"
+          echo "$test_packages"
+          echo "Test packages should not be published to NuGet.org."
+          exit 1
+        fi
+        
+        # Count main packages (exclude symbols packages)
+        main_packages=$(find . -name "*.nupkg" -type f ! -name "*.symbols.nupkg")
+        package_count=$(echo "$main_packages" | wc -l)
+        
+        if [ "$package_count" -ne 1 ]; then
+          echo "Error: Expected exactly 1 main NuGet package, found $package_count"
+          echo "Main packages found:"
+          echo "$main_packages"
+          exit 1
+        fi
+        
+        # Extract version from package name for checking
+        for package in $main_packages; do
+          package_name=$(basename "$package" .nupkg)
+          echo "Package name: $package_name"
+          
+          # Verify package follows expected naming convention
+          if [[ ! "$package_name" =~ ^EnergyExemplar\.EntityFrameworkCore\.DuckDb\.[0-9]+\.[0-9]+\.[0-9]+-preview$ ]]; then
+            echo "Error: Package name doesn't match expected format (EnergyExemplar.EntityFrameworkCore.DuckDb.x.y.z-preview)"
+            echo "Found: $package_name"
+            exit 1
+          fi
+          
+          version=$(echo "$package_name" | grep -oP '\d+\.\d+\.\d+(-[a-zA-Z0-9]+)?')
+          echo "Package version: $version"
+        done
     
-    - name: Push package to NuGet.org
-      run: dotnet nuget push "**/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://int.nugettest.org --skip-duplicate
+    - name: Verify package version and preview suffix
+      run: |
+        # Go back to the nuget-packages directory (in case we're not there)
+        cd "$NUGET_PACKAGES_DIR" || cd ./nuget-packages
+        
+        for package in $(find . -name "*.nupkg" -type f); do
+          package_name=$(basename "$package")
+          echo "Package name: $package_name"
+          
+          # Extract the full version including any suffix
+          # This handles formats like: PackageName.0.1.0-suffix.nupkg or PackageName.0.1.0.nupkg
+          package_version=$(echo "$package_name" | grep -oP '\d+\.\d+\.\d+(-[a-zA-Z0-9]+)?' || echo "unknown")
+          
+          echo "Extracted version: $package_version"
+          
+          if [ "$package_version" == "unknown" ]; then
+            echo "Error: Could not extract version from package name: $package_name"
+            exit 1
+          fi
+
+          # Verify package has exactly the preview suffix
+          if [[ "$package_version" != *-preview ]]; then
+            echo "Error: Package version must have exactly the '-preview' suffix, found: $package_version"
+            echo "All packages must use the '-preview' suffix to indicate pre-release status."
+            exit 1
+          fi
+          
+          # Check if matching Git tag exists
+          if ! git tag -l | grep -q "^$package_version$"; then
+            echo "Error: No matching Git tag found for package version $package_version"
+            echo "The Git tag must exactly match the NuGet package version."
+            exit 1
+          fi
+          
+          echo "✅ Verification passed: Package version $package_version matches Git tag and has -preview suffix"
+        done
+    
+    - name: Push packages to both registries
+      run: |
+        # Go back to the nuget-packages directory (in case we're not there)
+        cd "$NUGET_PACKAGES_DIR" || cd ./nuget-packages
+        
+        # Final verification before publishing
+        echo "Performing final verification before publishing..."
+        
+        # Verify no test packages exist
+        if [ -n "$(find . \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f)" ]; then
+          echo "Error: Test packages detected. Aborting publish."
+          exit 1
+        fi
+        
+        # Only push packages with the expected naming pattern - be more flexible with the pattern
+        # This accommodates potential differences between project name and package ID
+        main_packages=$(find . -name "*.nupkg" -type f ! -name "*.symbols.nupkg")
+        
+        if [ -z "$main_packages" ]; then
+          echo "Error: No main package found to push"
+          exit 1
+        fi
+        
+        # Track publishing results
+        github_publish_success=false
+        nuget_publish_success=false
+        
+        # Publish to both registries
+        for package in $main_packages; do
+          echo "========================================="
+          echo "Publishing package: $(basename "$package")"
+          echo "========================================="
+          
+          # Publish to GitHub Packages (always available via GITHUB_TOKEN)
+          echo ""
+          echo "📦 Publishing to GitHub Packages..."
+          if dotnet nuget push "$package" \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --source https://nuget.pkg.github.com/EnergyExemplar/index.json \
+            --skip-duplicate; then
+            echo "✅ Successfully published to GitHub Packages"
+            github_publish_success=true
+          else
+            echo "⚠️ Failed to publish to GitHub Packages (will continue)"
+          fi
+          
+          # Publish to NuGet.org (if API key is available)
+          echo ""
+          if [ -n "${{ secrets.NUGET_API_KEY }}" ]; then
+            echo "📦 Publishing to NuGet.org..."
+            if dotnet nuget push "$package" \
+              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate; then
+              echo "✅ Successfully published to NuGet.org"
+              nuget_publish_success=true
+            else
+              echo "⚠️ Failed to publish to NuGet.org (will continue)"
+            fi
+          else
+            echo "⚠️ NUGET_API_KEY not found, skipping NuGet.org publish"
+            echo "   Package will only be available on GitHub Packages"
+          fi
+        done
+        
+        # Summary and final status
+        echo ""
+        echo "========================================="
+        echo "📊 Publishing Summary"
+        echo "========================================="
+        
+        if [ "$github_publish_success" = true ]; then
+          echo "✅ GitHub Packages: Published successfully"
+        else
+          echo "❌ GitHub Packages: Failed to publish"
+        fi
+        
+        if [ -n "${{ secrets.NUGET_API_KEY }}" ]; then
+          if [ "$nuget_publish_success" = true ]; then
+            echo "✅ NuGet.org: Published successfully"
+          else
+            echo "❌ NuGet.org: Failed to publish"
+          fi
+        else
+          echo "⚠️ NuGet.org: Skipped (no API key)"
+        fi
+        
+        # Fail the workflow only if both registries failed
+        if [ "$github_publish_success" = false ] && [ "$nuget_publish_success" = false ]; then
+          echo ""
+          echo "❌ ERROR: Failed to publish to any registry"
+          exit 1
+        fi
+        
+        echo ""
+        echo "✅ Package publishing completed successfully"

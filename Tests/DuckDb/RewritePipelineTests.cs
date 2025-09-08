@@ -51,5 +51,40 @@ namespace Tests.DuckDb
             Assert.That(rewritten, Does.Not.Contain("|"));
             Assert.That(rewritten, Does.Contain("AND").And.Contain("OR"));
         }
+
+        [Test]
+        public void LimitMinusOneToOffset_Should_Convert_Limit_Minus_One_To_Offset_Only()
+        {
+            // Test case for issue #19: LIMIT -1 OFFSET N compatibility
+            string sql = "SELECT * FROM table LIMIT -1 OFFSET 10";
+            string expected = "SELECT * FROM table OFFSET 10";
+
+            string rewritten = RewritePipeline.Default.Rewrite(sql);
+
+            Assert.That(rewritten, Is.EqualTo(expected));
+            Assert.That(rewritten, Does.Not.Contain("LIMIT -1"));
+        }
+
+        [Test]
+        public void LimitMinusOneToOffset_Should_Handle_Case_Insensitive()
+        {
+            string sql = "SELECT * FROM table limit -1 offset 5";
+            string expected = "SELECT * FROM table OFFSET 5";
+
+            string rewritten = RewritePipeline.Default.Rewrite(sql);
+
+            Assert.That(rewritten, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void LimitMinusOneToOffset_Should_Not_Affect_Regular_Limit()
+        {
+            string sql = "SELECT * FROM table LIMIT 10 OFFSET 5";
+            string expected = sql; // Should remain unchanged
+
+            string rewritten = RewritePipeline.Default.Rewrite(sql);
+
+            Assert.That(rewritten, Is.EqualTo(expected));
+        }
     }
 }

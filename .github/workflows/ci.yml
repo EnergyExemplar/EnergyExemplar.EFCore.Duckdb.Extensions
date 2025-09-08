@@ -2,8 +2,7 @@ name: CI
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 env:
   DOTNET_VERSION: '8.0.x'
 # Cancel in‑progress runs when new commits are pushed
@@ -115,17 +114,18 @@ jobs:
       - name: Get latest version tag
         id: get_version
         run: |
-          # Get the latest tag matching 0.1.* pattern
-          LATEST_TAG=$(git tag -l "0.1.*" | sort -V | tail -n1)
+          # Get the latest tag matching 0.1.*-preview pattern
+          LATEST_TAG=$(git tag -l "0.1.*-preview" | sort -V | tail -n1)
 
           if [ -z "$LATEST_TAG" ]; then
-            # No tags exist, start with 0.1.0
-            NEW_VERSION="0.1.0"
+            # No tags exist, but there's already a 0.1.1-preview published manually
+            # Start with 0.1.2-preview
+            NEW_VERSION="0.1.2-preview"
           else
-            # Extract patch version and increment
-            PATCH_VERSION=$(echo $LATEST_TAG | cut -d'.' -f3)
+            # Extract patch version, increment, and append -preview
+            PATCH_VERSION=$(echo $LATEST_TAG | cut -d'.' -f3 | cut -d'-' -f1)
             NEW_PATCH=$((PATCH_VERSION + 1))
-            NEW_VERSION="0.1.$NEW_PATCH"
+            NEW_VERSION="0.1.$NEW_PATCH-preview"
           fi
 
           echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
@@ -157,15 +157,78 @@ jobs:
       - name: Build Release
         run: dotnet build --no-restore --configuration Release
         working-directory: ./Source
+
+      - name: Clean workspace of existing packages
+        run: |
+          # Remove any existing packages in the output directory
+          mkdir -p ./nuget-packages
+          rm -f ./nuget-packages/*.nupkg
+          
+          # Clean any test packages anywhere in the source tree
+          find . \( -name "*.nupkg" -o -name "*.snupkg" \) -type f -delete
+          
+          # Remove any test-nuget-packages directory to prevent it from being included
+          find . -type d -name "test-nuget-packages" -exec rm -rf {} +
       
       - name: Pack NuGet package
-        run: dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj --no-build --configuration Release --output ./nuget-packages /p:Version=${{ steps.get_version.outputs.new_version }}
+        run: |
+          # Use a relative path that will work in the GitHub Actions environment
+          dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
+            --no-build \
+            --configuration Release \
+            --output ./nuget-packages \
+            /p:Version=${{ steps.get_version.outputs.new_version }} \
+            /p:IsPackable=true \
+            /p:IncludeSymbols=true \
+            /p:NoWarn=NU5105
+          
+          # Extra safety: remove any test packages that might have been created
+          find ./nuget-packages \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f -delete
+
+      - name: Verify no test packages were created
+        run: |
+          # Check for any test packages and fail if found
+          TEST_PACKAGES=$(find ./nuget-packages \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f)
+          if [ ! -z "$TEST_PACKAGES" ]; then
+            echo "Error: Test packages were detected in the output:"
+            echo "$TEST_PACKAGES"
+            echo "Test packages should not be included in the release."
+            exit 1
+          fi
+          
+          # List all packages for debugging
+          echo "All packages in output directory:"
+          find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f
+          
+          # Verify we have exactly the expected package(s)
+          EXPECTED_PACKAGE="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.new_version }}.nupkg"
+          
+          # Check for presence of main package
+          if [ ! -f "./nuget-packages/$EXPECTED_PACKAGE" ]; then
+            echo "Error: Main package not found: $EXPECTED_PACKAGE"
+            exit 1
+          fi
+          
+          # Count total packages (including symbols)
+          PACKAGE_COUNT=$(find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f | wc -l)
+          
+          echo "Found $PACKAGE_COUNT package(s) in output directory"
+          echo "Main package: $EXPECTED_PACKAGE ✅"
+          
+          # Allow 1-2 packages (main + optional symbols)
+          if [ "$PACKAGE_COUNT" -lt 1 ] || [ "$PACKAGE_COUNT" -gt 2 ]; then
+            echo "Error: Expected 1-2 packages (main + optional symbols), found $PACKAGE_COUNT"
+            exit 1
+          fi
+          
+          echo "✅ Package verification successful - no test packages found"
       
       - name: Upload NuGet artifacts
         uses: actions/upload-artifact@v4
         with:
           name: nuget-packages
           path: ./nuget-packages/*.nupkg
+          if-no-files-found: error  # Make the build fail if no packages are found
 
       - name: Create artifacts directory
         run: mkdir -p ./artifacts
@@ -202,6 +265,7 @@ jobs:
 
           ### Changes
           - Automated release from commit ${{ github.sha }}
+          - Includes support for Claude 3.7 Thinking (hybrid stepwise reasoning mode)
 
           ### Download
           The release package is available as a zip file below." \

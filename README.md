@@ -377,6 +377,87 @@ services.AddDbContext<MyMultiParquetContext>((serviceProvider, options) =>
 - Query tracking is disabled by default for better performance (can be overridden via `NoTracking = false`)
 - All DuckDB dependencies are automatically registered when using the extensions
 
+## Custom Conventions (Optional)
+
+The library includes optional EF Core conventions that can simplify your model configuration by automatically mapping entity and property names directly to table and column names.
+
+### Available Conventions
+
+1. **EntityNameAsTableNameConvention**: Automatically sets table names to match entity class names
+2. **PropertyNameAsColumnNameConvention**: Automatically sets column names to match property names
+3. **CustomConventionSetBuilder**: Applies both conventions together
+
+### Usage
+
+```csharp
+using EnergyExemplar.EntityFrameworkCore.DuckDb.Conventions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions.Infrastructure;
+
+// Option 1: Apply conventions when configuring DbContext
+var options = new DbContextOptionsBuilder<MyDbContext>()
+    .UseDuckDb(opts =>
+    {
+        opts.ConnectionString = "DataSource=mydb.duckdb";
+    })
+    .ReplaceService<IProviderConventionSetBuilder, CustomConventionSetBuilder>()
+    .Options;
+
+// Option 2: Apply in dependency injection
+services.AddDbContext<MyDbContext>(options =>
+{
+    options.UseDuckDb(opts =>
+    {
+        opts.ConnectionString = configuration["DuckDb:ConnectionString"];
+    })
+    .ReplaceService<IProviderConventionSetBuilder, CustomConventionSetBuilder>();
+});
+```
+
+### Benefits
+
+- **Reduced Boilerplate**: No need to manually configure table and column names
+- **Consistency**: Ensures naming conventions are applied uniformly across your model
+- **DuckDB Compatibility**: Particularly useful when working with DuckDB views or Parquet files where column names must match exactly
+- **Simplified Migrations**: When entity/property names match database schema, there's less configuration needed
+
+### Example Scenario
+
+Without conventions:
+```csharp
+public class CustomerOrder
+{
+    public int OrderId { get; set; }
+    public string CustomerName { get; set; }
+}
+
+// Requires manual configuration
+modelBuilder.Entity<CustomerOrder>()
+    .ToTable("CustomerOrder")
+    .Property(e => e.CustomerName)
+    .HasColumnName("CustomerName");
+```
+
+With conventions (automatically applied):
+```csharp
+public class CustomerOrder
+{
+    public int OrderId { get; set; }
+    public string CustomerName { get; set; }
+}
+// No additional configuration needed!
+```
+
+### When to Use
+
+These conventions are particularly helpful when:
+- Your entity and property names already match your database schema
+- You're working with existing Parquet files or DuckDB views
+- You want to reduce EF Core configuration code
+- You prefer convention over configuration approach
+
+> **Note**: These conventions are optional. If you need different table/column names than your entity/property names, simply don't apply the conventions and use standard EF Core configuration.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
