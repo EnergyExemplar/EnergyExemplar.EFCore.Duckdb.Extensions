@@ -1,5 +1,8 @@
 # DuckDB Entity Framework Core Integration
 
+[![NuGet](https://img.shields.io/nuget/v/EnergyExemplar.EntityFrameworkCore.DuckDb.svg)](https://www.nuget.org/packages/EnergyExemplar.EntityFrameworkCore.DuckDb)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/EnergyExemplar.EntityFrameworkCore.DuckDb.svg)](https://www.nuget.org/packages/EnergyExemplar.EntityFrameworkCore.DuckDb)
+
 This provides a seamless integration between Entity Framework Core and DuckDB, allowing you to use DuckDB as your database while maintaining the familiar EF Core API.
 
 ## Features
