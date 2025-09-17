@@ -124,9 +124,9 @@ jobs:
           package_name=$(basename "$package" .nupkg)
           echo "Package name: $package_name"
           
-          # Verify package follows expected naming convention
-          if [[ ! "$package_name" =~ ^EnergyExemplar\.EntityFrameworkCore\.DuckDb\.[0-9]+\.[0-9]+\.[0-9]+-preview$ ]]; then
-            echo "Error: Package name doesn't match expected format (EnergyExemplar.EntityFrameworkCore.DuckDb.x.y.z-preview)"
+          # Verify package follows expected naming convention (with or without prerelease suffix)
+          if [[ ! "$package_name" =~ ^EnergyExemplar\.EntityFrameworkCore\.DuckDb\.[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "Error: Package name doesn't match expected format (EnergyExemplar.EntityFrameworkCore.DuckDb.x.y.z or EnergyExemplar.EntityFrameworkCore.DuckDb.x.y.z-suffix)"
             echo "Found: $package_name"
             exit 1
           fi
@@ -155,11 +155,11 @@ jobs:
             exit 1
           fi
 
-          # Verify package has exactly the preview suffix
-          if [[ "$package_version" != *-preview ]]; then
-            echo "Error: Package version must have exactly the '-preview' suffix, found: $package_version"
-            echo "All packages must use the '-preview' suffix to indicate pre-release status."
-            exit 1
+          # Log whether package is stable or prerelease
+          if [[ "$package_version" == *-* ]]; then
+            echo "Package version $package_version is a prerelease version"
+          else
+            echo "Package version $package_version is a stable release version"
           fi
           
           # Check if matching Git tag exists

@@ -30,9 +30,9 @@ DuckDB's columnar storage and vectorized execution engine provide substantial pe
 
 Ensure you have the necessary NuGet packages:
 ```xml
-<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.6" />
-<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.6" />
-<PackageReference Include="DuckDB.NET.Data.Full" Version="1.2.1" />
+<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.8" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
+<PackageReference Include="DuckDB.NET.Data.Full" Version="1.3.2" />
 ```
 
 ## Basic Usage
