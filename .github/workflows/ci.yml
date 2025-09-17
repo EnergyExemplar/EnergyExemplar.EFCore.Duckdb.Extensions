@@ -114,18 +114,21 @@ jobs:
       - name: Get latest version tag
         id: get_version
         run: |
-          # Get the latest tag matching 0.1.*-preview pattern
-          LATEST_TAG=$(git tag -l "0.1.*-preview" | sort -V | tail -n1)
+          # Get the latest semantic version tag
+          LATEST_TAG=$(git tag -l | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
 
           if [ -z "$LATEST_TAG" ]; then
-            # No tags exist, but there's already a 0.1.1-preview published manually
-            # Start with 0.1.2-preview
-            NEW_VERSION="0.1.2-preview"
+            # No stable tags exist, start with 1.0.0
+            NEW_VERSION="1.0.0"
           else
-            # Extract patch version, increment, and append -preview
-            PATCH_VERSION=$(echo $LATEST_TAG | cut -d'.' -f3 | cut -d'-' -f1)
-            NEW_PATCH=$((PATCH_VERSION + 1))
-            NEW_VERSION="0.1.$NEW_PATCH-preview"
+            # Parse semantic version
+            MAJOR=$(echo $LATEST_TAG | cut -d'.' -f1)
+            MINOR=$(echo $LATEST_TAG | cut -d'.' -f2)
+            PATCH=$(echo $LATEST_TAG | cut -d'.' -f3)
+
+            # Increment patch version for automatic releases
+            NEW_PATCH=$((PATCH + 1))
+            NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
           fi
 
           echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
@@ -265,7 +268,7 @@ jobs:
 
           ### Changes
           - Automated release from commit ${{ github.sha }}
-          - Includes support for Claude 3.7 Thinking (hybrid stepwise reasoning mode)
+          - See [CHANGELOG](https://github.com/EnergyExemplar/EnergyExemplar.EFCore.Duckdb.Extensions/commits/${{ steps.get_version.outputs.new_version }}) for details
 
           ### Download
           The release package is available as a zip file below." \
