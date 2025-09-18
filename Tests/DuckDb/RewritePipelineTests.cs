@@ -86,5 +86,117 @@ namespace Tests.DuckDb
 
             Assert.That(rewritten, Is.EqualTo(expected));
         }
+
+        [Test]
+        public void DateTimeNow_Should_Convert_Strftime_To_CurrentTimestamp()
+        {
+            string sql = "SELECT * FROM users WHERE created_date < strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')";
+            string expected = "SELECT * FROM users WHERE created_date < CURRENT_TIMESTAMP";
+
+            string rewritten = RewritePipeline.Default.Rewrite(sql);
+
+            Assert.That(rewritten, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void DateTimeNow_Should_Handle_Case_Insensitive()
+        {
+            string sql = "SELECT * FROM users WHERE created_date < STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW', 'LOCALTIME')";
+
+            string rewritten = RewritePipeline.Default.Rewrite(sql);
+
+            Assert.That(rewritten, Does.Contain("CURRENT_TIMESTAMP"));
+            Assert.That(rewritten, Does.Not.Contain("strftime").IgnoreCase);
+        }
+
+        [Test]
+        public void DateTimeNow_Should_Handle_Different_Format_Strings()
+        {
+            // Different format strings that EF Core might generate
+            string[] testCases = {
+                "strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')",
+                "strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')",
+                "strftime('%Y-%m-%d', 'now', 'localtime')"
+            };
+
+            foreach (var dateTimePattern in testCases)
+            {
+                string sql = $"SELECT * FROM users WHERE created_date < {dateTimePattern}";
+                string rewritten = RewritePipeline.Default.Rewrite(sql);
+
+                Assert.That(rewritten, Does.Contain("CURRENT_TIMESTAMP"),
+                    $"Failed to convert pattern: {dateTimePattern}");
+                Assert.That(rewritten, Does.Not.Contain("strftime"),
+                    $"strftime still present for pattern: {dateTimePattern}");
+            }
+        }
+
+        [Test]
+        public void DateTimeNow_Should_Not_Affect_Regular_Strftime()
+        {
+            // strftime without 'now' and 'localtime' should not be affected
+            string sql = "SELECT strftime('%Y-%m-%d', created_date) FROM users";
+            string expected = sql; // Should remain unchanged
+
+            string rewritten = RewritePipeline.Default.Rewrite(sql);
+
+            Assert.That(rewritten, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void DateTimeNow_Should_Handle_Multiple_Occurrences()
+        {
+            string sql = @"SELECT * FROM users
+                          WHERE created_date < strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime')
+                          OR updated_date > strftime('%Y-%m-%d', 'now', 'localtime')";
+
+            string rewritten = RewritePipeline.Default.Rewrite(sql);
+
+            // Count occurrences of CURRENT_TIMESTAMP
+            int count = System.Text.RegularExpressions.Regex.Matches(rewritten, "CURRENT_TIMESTAMP").Count;
+            Assert.That(count, Is.EqualTo(2), "Should have replaced both strftime calls");
+            Assert.That(rewritten, Does.Not.Contain("strftime"));
+        }
+
+        [Test]
+        public void DateTimeNow_Should_Handle_With_Whitespace_Variations()
+        {
+            string[] testCases = {
+                "strftime('%Y-%m-%d %H:%M:%f','now','localtime')", // No spaces
+                "strftime( '%Y-%m-%d %H:%M:%f' , 'now' , 'localtime' )", // Extra spaces
+                "strftime  (  '%Y-%m-%d %H:%M:%f'  ,  'now'  ,  'localtime'  )" // Multiple spaces
+            };
+
+            foreach (var pattern in testCases)
+            {
+                string sql = $"SELECT * FROM users WHERE created_date < {pattern}";
+                string rewritten = RewritePipeline.Default.Rewrite(sql);
+
+                Assert.That(rewritten, Does.Contain("CURRENT_TIMESTAMP"),
+                    $"Failed for pattern with whitespace: {pattern}");
+            }
+        }
+
+        [Test]
+        public void DateTimeNow_Should_Handle_Rtrim_Wrapped_Pattern()
+        {
+            // EF Core sometimes wraps DateTime patterns with rtrim to handle fractional seconds
+            string[] testCases = {
+                "rtrim(rtrim(strftime('%Y-%m-%d %H:%M:%f', 'now'), '0'), '.')",
+                "rtrim(rtrim(strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime'), '0'), '.')",
+                "rtrim(strftime('%Y-%m-%d', 'now'), '.')"
+            };
+
+            foreach (var pattern in testCases)
+            {
+                string sql = $"SELECT * FROM users WHERE created_date < {pattern}";
+                string rewritten = RewritePipeline.Default.Rewrite(sql);
+
+                Assert.That(rewritten, Does.Contain("CURRENT_TIMESTAMP"),
+                    $"Failed for rtrim wrapped pattern: {pattern}");
+                Assert.That(rewritten, Does.Not.Contain("strftime").IgnoreCase,
+                    $"strftime still present for pattern: {pattern}");
+            }
+        }
     }
 }

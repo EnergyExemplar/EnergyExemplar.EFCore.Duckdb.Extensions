@@ -29,7 +29,8 @@ namespace EnergyExemplar.Extensions.DuckDb.Internals
             DuckSqlRules.RandomFuncAlias,
             DuckSqlRules.BitwiseAndToLogicalAnd,
             DuckSqlRules.BitwiseOrToLogicalOr,
-            DuckSqlRules.LimitMinusOneToOffset
+            DuckSqlRules.LimitMinusOneToOffset,
+            DuckSqlRules.DateTimeNowToCurrentTimestamp
         });
     }
 }
