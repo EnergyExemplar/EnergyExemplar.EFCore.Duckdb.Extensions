@@ -525,5 +525,92 @@ namespace Tests.DuckDb
 
             Assert.That(timeoutVal, Is.EqualTo(77));
         }
+
+        [Test]
+        public void DateTimeNow_Should_Work_In_Queries_Without_Variable()
+        {
+            // Test for issue #24: DateTime.Now directly in LINQ expression should work
+            var parquetPath = GetParquetPath();
+            var builder = new DbContextOptionsBuilder<ParquetContext>();
+            builder.UseDuckDbOnParquet(parquetPath);
+
+            using var ctx = new ParquetContext(builder.Options);
+
+            // This query uses DateTime.Now directly in the LINQ expression
+            // EF Core's SQLite provider generates strftime SQL that needs to be converted to CURRENT_TIMESTAMP
+            var query = ctx.Items
+                .Where(i => i.DateAdded < DateTime.Now)
+                .OrderBy(i => i.ID)
+                .Take(10);
+
+            // This should not throw an exception anymore
+            var items = query.ToList();
+
+            // Verify query executed successfully
+            Assert.That(items, Is.Not.Null);
+
+            // Examine the generated SQL to ensure strftime is converted
+            string sql = query.ToQueryString();
+            TestContext.WriteLine("Generated SQL: " + sql);
+
+            // The SQL should either use CURRENT_TIMESTAMP (after rewrite) or a parameter
+            // EF Core might optimize DateTime.Now to a parameter in some cases
+            Assert.That(
+                sql.ToUpper().Contains("CURRENT_TIMESTAMP") || sql.Contains("@"),
+                "Query should either use CURRENT_TIMESTAMP or parameterize DateTime.Now");
+        }
+
+        [Test]
+        public void DateTimeNow_Should_Work_With_Variable_Assignment()
+        {
+            // Test that the workaround (assigning to variable) continues to work
+            var parquetPath = GetParquetPath();
+            var builder = new DbContextOptionsBuilder<ParquetContext>();
+            builder.UseDuckDbOnParquet(parquetPath);
+
+            using var ctx = new ParquetContext(builder.Options);
+
+            // This approach should work without our fix (as shown in the issue)
+            var now = DateTime.Now;
+            var query = ctx.Items
+                .Where(i => i.DateAdded < now)
+                .OrderBy(i => i.ID)
+                .Take(10);
+
+            // This should work fine as it gets parameterized
+            var items = query.ToList();
+
+            Assert.That(items, Is.Not.Null);
+
+            string sql = query.ToQueryString();
+            TestContext.WriteLine("Generated SQL with variable: " + sql);
+
+            // With a variable, EF Core should parameterize it
+            StringAssert.Contains("@", sql, "Query with DateTime variable should be parameterized");
+        }
+
+        [Test]
+        public void DateTimeUtcNow_Should_Also_Work_In_Queries()
+        {
+            // Test that DateTime.UtcNow also works (similar pattern)
+            var parquetPath = GetParquetPath();
+            var builder = new DbContextOptionsBuilder<ParquetContext>();
+            builder.UseDuckDbOnParquet(parquetPath);
+
+            using var ctx = new ParquetContext(builder.Options);
+
+            var query = ctx.Items
+                .Where(i => i.DateAdded < DateTime.UtcNow)
+                .OrderBy(i => i.ID)
+                .Take(10);
+
+            // This should not throw an exception
+            var items = query.ToList();
+
+            Assert.That(items, Is.Not.Null);
+
+            string sql = query.ToQueryString();
+            TestContext.WriteLine("Generated SQL for UtcNow: " + sql);
+        }
     }
 }

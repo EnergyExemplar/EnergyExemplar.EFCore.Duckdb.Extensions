@@ -43,5 +43,18 @@ namespace EnergyExemplar.Extensions.DuckDb.Internals
             "LimitMinusOne→Offset",
             s => Regex.IsMatch(s, @"LIMIT\s+-1\s+OFFSET\s+\d+", RegexOptions.IgnoreCase),
             s => Regex.Replace(s, @"LIMIT\s+-1\s+OFFSET\s+(\d+)", "OFFSET $1", RegexOptions.IgnoreCase));
+
+        internal static readonly SqlRewriteRule DateTimeNowToCurrentTimestamp = new(
+            "DateTimeNow→CurrentTimestamp",
+            s => Regex.IsMatch(s, @"strftime\s*\(\s*'[^']+'\s*,\s*'now'(?:\s*,\s*'localtime')?\s*\)", RegexOptions.IgnoreCase),
+            s =>
+            {
+                // Handle both patterns:
+                // 1. strftime('%Y-%m-%d %H:%M:%f', 'now', 'localtime') -> CURRENT_TIMESTAMP
+                // 2. strftime('%Y-%m-%d %H:%M:%f', 'now') -> CURRENT_TIMESTAMP
+                // 3. Also handle when wrapped with rtrim: rtrim(rtrim(strftime(...), '0'), '.')
+                var pattern = @"(?:rtrim\s*\(\s*)*(?:rtrim\s*\(\s*)*strftime\s*\(\s*'[^']+'\s*,\s*'now'(?:\s*,\s*'localtime')?\s*\)(?:\s*,\s*'[^']*'\s*\))*(?:\s*,\s*'[^']*'\s*\))*";
+                return Regex.Replace(s, pattern, "CURRENT_TIMESTAMP", RegexOptions.IgnoreCase);
+            });
     }
 }
