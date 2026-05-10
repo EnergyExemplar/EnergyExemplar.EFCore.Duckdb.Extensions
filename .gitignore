@@ -15,3 +15,4 @@
 /Source/bin/Release
 /Tests/bin/Release/net8.0
 /Tests/TestResults/b14ec04d-7304-467a-88c3-54469dd7212c/coverage.cobertura.xml
+/Tests/bin/Debug/net10.0
