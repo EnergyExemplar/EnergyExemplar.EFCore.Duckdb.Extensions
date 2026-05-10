@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     
@@ -11,15 +11,15 @@
     
     <!-- NuGet Package Properties -->
     <PackageId>EnergyExemplar.EntityFrameworkCore.DuckDb</PackageId>
-    <Version>1.0.1</Version>
-    <AssemblyVersion>1.0.1.0</AssemblyVersion>
-    <FileVersion>1.0.1.0</FileVersion>
+    <Version>10.0.0</Version>
+    <AssemblyVersion>10.0.0.0</AssemblyVersion>
+    <FileVersion>10.0.0.0</FileVersion>
     <Title>DuckDB Entity Framework Core Integration</Title>
     <Description>Seamless integration between Entity Framework Core and DuckDB, providing significant performance improvements for analytical queries with a simple, developer-friendly API.</Description>
     <Authors>Energy Exemplar Pty Ltd</Authors>
     <Company>Energy Exemplar Pty Ltd</Company>
     <Product>EnergyExemplar DuckDB Extensions</Product>
-    <Copyright>Copyright (c) 2025 Energy Exemplar Pty Ltd</Copyright>
+    <Copyright>Copyright (c) 2026 Energy Exemplar Pty Ltd</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/EnergyExemplar/EnergyExemplar.EFCore.Duckdb.Extensions</PackageProjectUrl>
@@ -35,16 +35,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DuckDB.NET.Data.Full" Version="1.4.1" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.8" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.8" />
-  </ItemGroup>
-
-  <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>Tests</_Parameter1>
     </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DuckDB.NET.Data" Version="1.5.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Abstractions" Version="10.0.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite.Core" Version="10.0.7" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.7" />
   </ItemGroup>
 
 </Project>

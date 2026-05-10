@@ -1,10 +1,6 @@
-using System;
-using System.IO;
-using System.Linq;
 using EnergyExemplar.EntityFrameworkCore.DuckDb;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
-using NUnit.Framework;
+using NUnit.Framework.Legacy;
 using System.Reflection;
 
 namespace Tests.DuckDb
