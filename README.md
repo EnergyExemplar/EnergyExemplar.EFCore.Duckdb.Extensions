@@ -5,6 +5,9 @@
 
 This provides a seamless integration between Entity Framework Core and DuckDB, allowing you to use DuckDB as your database while maintaining the familiar EF Core API.
 
+> **⚠️ Native library dependencies not included**
+> This package does **not** include the DuckDB or SQLite native libraries. You must add the appropriate driver packages to your project separately — see the [Installation](#installation) section below.
+
 ## Features
 
 - **Simple API**: Just use `UseDuckDb()` similar to `UseSqlite()` or `UseSqlServer()`
@@ -30,9 +33,9 @@ DuckDB's columnar storage and vectorized execution engine provide substantial pe
 
 Ensure you have the necessary NuGet packages:
 ```xml
-<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.8" />
-<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
-<PackageReference Include="DuckDB.NET.Data.Full" Version="1.3.2" />
+<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.7" />
+<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.7" />
+<PackageReference Include="DuckDB.NET.Data" Version="1.5.2" />
 ```
 
 ## Basic Usage
