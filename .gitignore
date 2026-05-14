@@ -6,12 +6,10 @@
 /obj
 /bin/Debug
 /Source/.vs/EnergyExemplar.Extensions
-/Source/bin/Debug
+/Source/bin
 /Source/obj
-/Tests/bin/Debug/net8.0
+/Tests/bin
 /Tests/obj
 /Source/.vs/ProjectEvaluation
 /Source/.vs/EnergyExemplar.EFCore.Duckdb.Extensions
-/Source/bin/Release
-/Tests/bin/Release/net8.0
-/Tests/TestResults/b14ec04d-7304-467a-88c3-54469dd7212c/coverage.cobertura.xml
+/Tests/TestResults

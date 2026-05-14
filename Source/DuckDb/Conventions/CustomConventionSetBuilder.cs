@@ -10,7 +10,11 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb.Conventions
 {
     public class CustomConventionSetBuilder : SqlServerConventionSetBuilder
     {
-        public CustomConventionSetBuilder(ProviderConventionSetBuilderDependencies dependencies, RelationalConventionSetBuilderDependencies relationalDependencies, ISqlGenerationHelper sqlGenerationHelper) : base(dependencies, relationalDependencies, sqlGenerationHelper)
+        public CustomConventionSetBuilder(
+            ProviderConventionSetBuilderDependencies dependencies, 
+            RelationalConventionSetBuilderDependencies relationalDependencies, 
+            ISqlGenerationHelper sqlGenerationHelper) : 
+            base(dependencies, relationalDependencies, sqlGenerationHelper)
         {
         }
         public override ConventionSet CreateConventionSet()
@@ -19,7 +23,6 @@ namespace EnergyExemplar.EntityFrameworkCore.DuckDb.Conventions
             set.EntityTypeAddedConventions.Add(new EntityNameAsTableNameConvention());
             set.PropertyAddedConventions.Add(new PropertyNameAsColumnNameConvention());
             return set;
-
         }
     }
 }

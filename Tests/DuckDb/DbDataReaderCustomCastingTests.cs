@@ -1,8 +1,5 @@
-using System;
-using System.Linq;
 using DuckDB.NET.Data;
 using EnergyExemplar.EntityFrameworkCore.DuckDb.Interceptors;
-using NUnit.Framework;
 
 namespace Tests.DuckDb
 {

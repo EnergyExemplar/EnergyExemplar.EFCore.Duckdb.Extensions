@@ -1,5 +1,4 @@
 using EnergyExemplar.Extensions.DuckDb.Internals;
-using NUnit.Framework;
 
 namespace Tests.DuckDb
 {

@@ -5,6 +5,9 @@
 
 This provides a seamless integration between Entity Framework Core and DuckDB, allowing you to use DuckDB as your database while maintaining the familiar EF Core API.
 
+> **⚠️ Native library dependencies not included**
+> This package does **not** include the DuckDB or SQLite native libraries. You must add the appropriate driver packages to your project separately — see the [Installation](#installation) section below.
+
 ## Features
 
 - **Simple API**: Just use `UseDuckDb()` similar to `UseSqlite()` or `UseSqlServer()`
@@ -28,12 +31,59 @@ DuckDB's columnar storage and vectorized execution engine provide substantial pe
 
 ## Installation
 
-Ensure you have the necessary NuGet packages:
+Add the main package to your project:
+
 ```xml
-<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.8" />
-<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.8" />
-<PackageReference Include="DuckDB.NET.Data.Full" Version="1.3.2" />
+<PackageReference Include="EnergyExemplar.EntityFrameworkCore.DuckDb" Version="*" />
 ```
+
+### Native Binary Dependencies
+
+The native library requirements differ by target framework:
+
+#### .NET 8 (`net8.0`)
+
+The `net8.0` build of this package **includes** the native DuckDB and SQLite binaries transitively via `DuckDB.NET.Data.Full` and `SourceGear.sqlite3`. No additional packages are required.
+
+#### .NET 10 (`net10.0`)
+
+The `net10.0` build does **not** include native binaries. You must supply them explicitly.
+
+**DuckDB native binaries** — add one of:
+```xml
+<PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.2" />
+```
+
+**SQLite native binaries** — add one of:
+- `Microsoft.EntityFrameworkCore.Sqlite` (the full package, not `.Core`) — if you are already referencing it in your project, its transitive dependency on `SQLitePCLRaw.bundle_e_sqlite3` covers SQLite binaries automatically.
+- Or add a standalone SQLite bundle explicitly:
+```xml
+<PackageReference Include="SourceGear.sqlite3" Version="3.50.4.5" />
+```
+
+> **Why the difference?** The `net8.0` build bundles binaries to avoid breaking existing consumers. The `net10.0` build intentionally omits them so you can choose the binary packages appropriate for your platform and deployment environment.
+
+## Versioning
+
+Starting with version `10.0.0`, this package adopts a versioning scheme aligned with the .NET and EF Core major version it targets:
+
+| Package version | Target framework | EF Core version |
+|-----------------|-----------------|-----------------|
+| `10.0.x`        | `net10.0`       | `10.x`          |
+| `8.0.x`         | `net8.0`        | `8.x`           |
+| `1.x` (legacy)  | `net8.0`        | `8.x`           |
+
+When referencing the package, pin to the major version that matches your target framework:
+
+```xml
+<!-- .NET 10 projects -->
+<PackageReference Include="EnergyExemplar.EntityFrameworkCore.DuckDb" Version="10.0.*" />
+
+<!-- .NET 8 projects -->
+<PackageReference Include="EnergyExemplar.EntityFrameworkCore.DuckDb" Version="8.0.*" />
+```
+
+> **Upgrading from 1.x?** If you are currently on a `1.x` release (net8), move to the `8.0.x` range. No API changes are required — only the version pin needs updating.
 
 ## Basic Usage
 
