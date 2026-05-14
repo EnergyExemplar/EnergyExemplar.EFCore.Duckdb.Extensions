@@ -4,7 +4,8 @@ on:
     branches: [ main ]
   workflow_dispatch:
 env:
-  DOTNET_VERSION: '8.0.x'
+  DOTNET_NET8_VERSION: '8.0.x'
+  DOTNET_NET10_VERSION: '10.0.x'
 # Cancel in‑progress runs when new commits are pushed
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -25,7 +26,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            ${{ env.DOTNET_NET8_VERSION }}
+            ${{ env.DOTNET_NET10_VERSION }}
       - name: Cache dependencies
         uses: actions/cache@v4
         with:
@@ -67,7 +70,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            ${{ env.DOTNET_NET8_VERSION }}
+            ${{ env.DOTNET_NET10_VERSION }}
       - name: Restore dependencies
         run: dotnet restore --verbosity normal
         working-directory: ./Source
@@ -109,41 +114,46 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-version: |
+            ${{ env.DOTNET_NET8_VERSION }}
+            ${{ env.DOTNET_NET10_VERSION }}
 
-      - name: Get latest version tag
+      - name: Get latest version tagss
         id: get_version
         run: |
-          # Get the latest semantic version tag
-          LATEST_TAG=$(git tag -l | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
-
-          if [ -z "$LATEST_TAG" ]; then
-            # No stable tags exist, start with 1.0.0
-            NEW_VERSION="1.0.0"
+          # net8: find the latest 8.0.x tag and increment patch
+          LATEST_NET8=$(git tag -l | grep -E '^8\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          if [ -z "$LATEST_NET8" ]; then
+            NET8_VERSION="8.0.0"
           else
-            # Parse semantic version
-            MAJOR=$(echo $LATEST_TAG | cut -d'.' -f1)
-            MINOR=$(echo $LATEST_TAG | cut -d'.' -f2)
-            PATCH=$(echo $LATEST_TAG | cut -d'.' -f3)
-
-            # Increment patch version for automatic releases
-            NEW_PATCH=$((PATCH + 1))
-            NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+            PATCH=$(echo $LATEST_NET8 | cut -d'.' -f3)
+            NET8_VERSION="8.0.$((PATCH + 1))"
           fi
 
-          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "Latest tag: $LATEST_TAG"
-          echo "New version: $NEW_VERSION"
+          # net10: find the latest 10.0.x tag and increment patch
+          LATEST_NET10=$(git tag -l | grep -E '^10\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          if [ -z "$LATEST_NET10" ]; then
+            NET10_VERSION="10.0.0"
+          else
+            PATCH=$(echo $LATEST_NET10 | cut -d'.' -f3)
+            NET10_VERSION="10.0.$((PATCH + 1))"
+          fi
 
-      - name: Create and push Git tag
+          echo "net8_version=$NET8_VERSION" >> $GITHUB_OUTPUT
+          echo "net10_version=$NET10_VERSION" >> $GITHUB_OUTPUT
+          echo "Net8 version: $NET8_VERSION"
+          echo "Net10 version: $NET10_VERSION"
+
+      - name: Create and push Git tags
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ steps.get_version.outputs.new_version }}
-          git push origin ${{ steps.get_version.outputs.new_version }}
+          git tag ${{ steps.get_version.outputs.net8_version }}
+          git tag ${{ steps.get_version.outputs.net10_version }}
+          git push origin ${{ steps.get_version.outputs.net8_version }}
+          git push origin ${{ steps.get_version.outputs.net10_version }}
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -155,10 +165,6 @@ jobs:
 
       - name: Restore dependencies
         run: dotnet restore
-        working-directory: ./Source
-
-      - name: Build Release
-        run: dotnet build --no-restore --configuration Release
         working-directory: ./Source
 
       - name: Clean workspace of existing packages
@@ -173,18 +179,34 @@ jobs:
           # Remove any test-nuget-packages directory to prevent it from being included
           find . -type d -name "test-nuget-packages" -exec rm -rf {} +
       
-      - name: Pack NuGet package
+      - name: Pack NuGet packages
         run: |
-          # Use a relative path that will work in the GitHub Actions environment
+          # Pack net8.0 with 8.0.x versioning (includes native binaries)
           dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
-            --no-build \
+            --no-restore \
             --configuration Release \
+            --framework net8.0 \
             --output ./nuget-packages \
-            /p:Version=${{ steps.get_version.outputs.new_version }} \
+            /p:Version=${{ steps.get_version.outputs.net8_version }} \
+            /p:FileVersion=${{ steps.get_version.outputs.net8_version }}.1 \
+            /p:AssemblyVersion=${{ steps.get_version.outputs.net8_version }}.1 \
             /p:IsPackable=true \
             /p:IncludeSymbols=true \
             /p:NoWarn=NU5105
-          
+
+          # Pack net10.0 with 10.0.x versioning (binaries supplied by consumer)
+          dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
+            --no-restore \
+            --configuration Release \
+            --framework net10.0 \
+            --output ./nuget-packages \
+            /p:Version=${{ steps.get_version.outputs.net10_version }} \
+            /p:FileVersion=${{ steps.get_version.outputs.net10_version }}.1 \
+            /p:AssemblyVersion=${{ steps.get_version.outputs.net10_version }}.1 \
+            /p:IsPackable=true \
+            /p:IncludeSymbols=true \
+            /p:NoWarn=NU5105
+
           # Extra safety: remove any test packages that might have been created
           find ./nuget-packages \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f -delete
 
@@ -203,24 +225,29 @@ jobs:
           echo "All packages in output directory:"
           find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f
           
-          # Verify we have exactly the expected package(s)
-          EXPECTED_PACKAGE="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.new_version }}.nupkg"
-          
-          # Check for presence of main package
-          if [ ! -f "./nuget-packages/$EXPECTED_PACKAGE" ]; then
-            echo "Error: Main package not found: $EXPECTED_PACKAGE"
+          # Verify we have the expected net8 and net10 packages
+          NET8_PKG="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.net8_version }}.nupkg"
+          NET10_PKG="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.net10_version }}.nupkg"
+
+          if [ ! -f "./nuget-packages/$NET8_PKG" ]; then
+            echo "Error: net8 package not found: $NET8_PKG"
             exit 1
           fi
-          
+          if [ ! -f "./nuget-packages/$NET10_PKG" ]; then
+            echo "Error: net10 package not found: $NET10_PKG"
+            exit 1
+          fi
+
           # Count total packages (including symbols)
           PACKAGE_COUNT=$(find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f | wc -l)
-          
+
           echo "Found $PACKAGE_COUNT package(s) in output directory"
-          echo "Main package: $EXPECTED_PACKAGE ✅"
-          
-          # Allow 1-2 packages (main + optional symbols)
-          if [ "$PACKAGE_COUNT" -lt 1 ] || [ "$PACKAGE_COUNT" -gt 2 ]; then
-            echo "Error: Expected 1-2 packages (main + optional symbols), found $PACKAGE_COUNT"
+          echo "Net8 package:  $NET8_PKG ✅"
+          echo "Net10 package: $NET10_PKG ✅"
+
+          # Allow 2-4 packages (net8 main + net10 main + optional symbols for each)
+          if [ "$PACKAGE_COUNT" -lt 2 ] || [ "$PACKAGE_COUNT" -gt 4 ]; then
+            echo "Error: Expected 2-4 packages (net8 + net10 main + optional symbols), found $PACKAGE_COUNT"
             exit 1
           fi
           
