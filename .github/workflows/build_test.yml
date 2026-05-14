@@ -5,6 +5,12 @@ on:
     types: [opened, synchronize, reopened]
     branches: [ main, develop ]
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: write
+
 env:
   DOTNET_VERSION: '8.0.x'
 
