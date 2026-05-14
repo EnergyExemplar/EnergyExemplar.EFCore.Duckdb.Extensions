@@ -179,14 +179,17 @@ jobs:
           # Remove any test-nuget-packages directory to prevent it from being included
           find . -type d -name "test-nuget-packages" -exec rm -rf {} +
       
+      - name: Build Release
+        run: dotnet build ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj --no-restore --configuration Release
+
       - name: Pack NuGet packages
         run: |
           # Pack net8.0 with 8.0.x versioning (includes native binaries)
           dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
-            --no-restore \
+            --no-build \
             --configuration Release \
-            --framework net8.0 \
             --output ./nuget-packages \
+            /p:TargetFrameworks=net8.0 \
             /p:Version=${{ steps.get_version.outputs.net8_version }} \
             /p:FileVersion=${{ steps.get_version.outputs.net8_version }}.1 \
             /p:AssemblyVersion=${{ steps.get_version.outputs.net8_version }}.1 \
@@ -196,10 +199,10 @@ jobs:
 
           # Pack net10.0 with 10.0.x versioning (binaries supplied by consumer)
           dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
-            --no-restore \
+            --no-build \
             --configuration Release \
-            --framework net10.0 \
             --output ./nuget-packages \
+            /p:TargetFrameworks=net10.0 \
             /p:Version=${{ steps.get_version.outputs.net10_version }} \
             /p:FileVersion=${{ steps.get_version.outputs.net10_version }}.1 \
             /p:AssemblyVersion=${{ steps.get_version.outputs.net10_version }}.1 \
