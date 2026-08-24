@@ -113,5 +113,53 @@ namespace Tests.DuckDb
                 Assert.Throws<FormatException>(() => reader.GetDecimal(3)); // 'invalid' string should throw
             });
         }
+
+        // Regression guard for DuckDB.NET issue #332 (fixed in 1.5.3): reading column
+        // metadata after a result set was exhausted threw IndexOutOfRangeException on
+        // 1.5.0–1.5.2, because InitNextReader() cleared the vector readers before probing
+        // for another result set while FieldCount still held the previous column count.
+        // EF Core materialization and DataTable.Load drive exactly this path — read every
+        // row, call NextResult() to probe for more result sets, then inspect the schema —
+        // and this library's DbDataReaderCustomCasting delegates every one of these members.
+        [Test]
+        public void Decorator_ReadsColumnMetadata_AfterResultExhausted()
+        {
+            using var conn = CreateConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT 1 AS id, 'a' AS name";
+            using var reader = new DbDataReaderCustomCasting(cmd.ExecuteReader());
+
+            while (reader.Read()) { }                     // exhaust all rows
+            Assert.That(reader.NextResult(), Is.False);    // probe for further result sets
+
+            // These delegated members are the exact frames in issue #332's stack trace.
+            Assert.Multiple(() =>
+            {
+                Assert.That(reader.FieldCount, Is.EqualTo(2));
+                Assert.That(reader.GetName(0), Is.EqualTo("id"));
+                Assert.That(reader.GetName(1), Is.EqualTo("name"));
+                Assert.That(reader.GetFieldType(0), Is.EqualTo(typeof(int)));
+                Assert.That(reader.GetDataTypeName(1), Is.Not.Null);
+            });
+        }
+
+        // Companion to the above at the raw provider surface — mirrors the exact call in
+        // issue #332 (GetSchemaTable). The decorator does not override GetSchemaTable, so
+        // this asserts against the underlying DuckDBDataReader the library wraps.
+        [Test]
+        public void RawReader_GetSchemaTable_AfterResultExhausted_DoesNotThrow()
+        {
+            using var conn = CreateConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT 1 AS id, 'a' AS name";
+            using var reader = cmd.ExecuteReader();
+
+            while (reader.Read()) { }
+            Assert.That(reader.NextResult(), Is.False);
+
+            var schema = reader.GetSchemaTable();
+            Assert.That(schema, Is.Not.Null);
+            Assert.That(schema!.Rows, Has.Count.EqualTo(2));
+        }
     }
 }
