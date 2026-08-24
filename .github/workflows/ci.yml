@@ -122,47 +122,34 @@ jobs:
             ${{ env.DOTNET_NET8_VERSION }}
             ${{ env.DOTNET_NET10_VERSION }}
 
-      - name: Get latest version tagss
+      - name: Get release version
         id: get_version
         run: |
-          # net8: find the latest 8.0.x tag and increment patch
-          LATEST_NET8=$(git tag -l | grep -E '^8\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
-          if [ -z "$LATEST_NET8" ]; then
-            NET8_VERSION="8.0.0"
+          # The package ships as a SINGLE multi-target (net8.0;net10.0) NuGet
+          # package on the 1.x line. Find the latest 1.x.y tag and bump the patch.
+          # Deriving MAJOR.MINOR from the tag (not hardcoding) means a future
+          # manual minor bump (e.g. tag 1.1.0) is respected automatically.
+          LATEST=$(git tag -l | grep -E '^1\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          if [ -z "$LATEST" ]; then
+            NEW_VERSION="1.0.0"
           else
-            PATCH=$(echo $LATEST_NET8 | cut -d'.' -f3)
-            NET8_VERSION="8.0.$((PATCH + 1))"
+            MAJOR=$(echo "$LATEST" | cut -d'.' -f1)
+            MINOR=$(echo "$LATEST" | cut -d'.' -f2)
+            PATCH=$(echo "$LATEST" | cut -d'.' -f3)
+            NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
           fi
 
-          # net10: find the latest 10.0.x tag and increment patch
-          LATEST_NET10=$(git tag -l | grep -E '^10\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
-          if [ -z "$LATEST_NET10" ]; then
-            NET10_VERSION="10.0.0"
-          else
-            PATCH=$(echo $LATEST_NET10 | cut -d'.' -f3)
-            NET10_VERSION="10.0.$((PATCH + 1))"
-          fi
-
-          # Single version used for the GitHub Release tag, zip name and version file.
-          # Track the net10 line as the primary going-forward framework.
-          NEW_VERSION="$NET10_VERSION"
-
-          echo "net8_version=$NET8_VERSION" >> $GITHUB_OUTPUT
-          echo "net10_version=$NET10_VERSION" >> $GITHUB_OUTPUT
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "Net8 version: $NET8_VERSION"
-          echo "Net10 version: $NET10_VERSION"
+          echo "Release version: $NEW_VERSION"
 
-      - name: Create and push Git tags
+      - name: Create and push Git tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ steps.get_version.outputs.net8_version }}
-          git tag ${{ steps.get_version.outputs.net10_version }}
-          git push origin ${{ steps.get_version.outputs.net8_version }}
-          git push origin ${{ steps.get_version.outputs.net10_version }}
+          git tag ${{ steps.get_version.outputs.new_version }}
+          git push origin ${{ steps.get_version.outputs.new_version }}
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -191,30 +178,18 @@ jobs:
       - name: Build Release
         run: dotnet build ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj --no-restore --configuration Release
 
-      - name: Pack NuGet packages
+      - name: Pack NuGet package
         run: |
-          # Pack net8.0 with 8.0.x versioning (includes native binaries)
+          # Single multi-target package: the csproj already targets net8.0;net10.0,
+          # so one pack produces one .nupkg with lib/net8.0 + lib/net10.0 and the
+          # correct per-TFM dependency groups. Version is the 1.x line.
           dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
             --no-build \
             --configuration Release \
             --output ./nuget-packages \
-            /p:TargetFrameworks=net8.0 \
-            /p:Version=${{ steps.get_version.outputs.net8_version }} \
-            /p:FileVersion=${{ steps.get_version.outputs.net8_version }}.1 \
-            /p:AssemblyVersion=${{ steps.get_version.outputs.net8_version }}.1 \
-            /p:IsPackable=true \
-            /p:IncludeSymbols=true \
-            /p:NoWarn=NU5105
-
-          # Pack net10.0 with 10.0.x versioning (binaries supplied by consumer)
-          dotnet pack ./Source/EnergyExemplar.EFCore.Duckdb.Extensions.csproj \
-            --no-build \
-            --configuration Release \
-            --output ./nuget-packages \
-            /p:TargetFrameworks=net10.0 \
-            /p:Version=${{ steps.get_version.outputs.net10_version }} \
-            /p:FileVersion=${{ steps.get_version.outputs.net10_version }}.1 \
-            /p:AssemblyVersion=${{ steps.get_version.outputs.net10_version }}.1 \
+            /p:Version=${{ steps.get_version.outputs.new_version }} \
+            /p:FileVersion=${{ steps.get_version.outputs.new_version }}.1 \
+            /p:AssemblyVersion=${{ steps.get_version.outputs.new_version }}.1 \
             /p:IsPackable=true \
             /p:IncludeSymbols=true \
             /p:NoWarn=NU5105
@@ -222,7 +197,7 @@ jobs:
           # Extra safety: remove any test packages that might have been created
           find ./nuget-packages \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f -delete
 
-      - name: Verify no test packages were created
+      - name: Verify package
         run: |
           # Check for any test packages and fail if found
           TEST_PACKAGES=$(find ./nuget-packages \( -name "*test*.nupkg" -o -name "*.Test*.nupkg" -o -name "*.Tests*.nupkg" \) -type f)
@@ -232,37 +207,30 @@ jobs:
             echo "Test packages should not be included in the release."
             exit 1
           fi
-          
+
           # List all packages for debugging
           echo "All packages in output directory:"
-          find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f
-          
-          # Verify we have the expected net8 and net10 packages
-          NET8_PKG="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.net8_version }}.nupkg"
-          NET10_PKG="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.net10_version }}.nupkg"
+          find ./nuget-packages \( -name "*.nupkg" -o -name "*.snupkg" \) -type f
 
-          if [ ! -f "./nuget-packages/$NET8_PKG" ]; then
-            echo "Error: net8 package not found: $NET8_PKG"
-            exit 1
-          fi
-          if [ ! -f "./nuget-packages/$NET10_PKG" ]; then
-            echo "Error: net10 package not found: $NET10_PKG"
+          # Verify the single expected multi-target package exists
+          MAIN_PKG="EnergyExemplar.EntityFrameworkCore.DuckDb.${{ steps.get_version.outputs.new_version }}.nupkg"
+          if [ ! -f "./nuget-packages/$MAIN_PKG" ]; then
+            echo "Error: expected package not found: $MAIN_PKG"
             exit 1
           fi
 
-          # Count total packages (including symbols)
-          PACKAGE_COUNT=$(find ./nuget-packages -name "*.nupkg" -o -name "*.snupkg" -type f | wc -l)
+          # Count total packages (main .nupkg + optional .snupkg symbols)
+          PACKAGE_COUNT=$(find ./nuget-packages \( -name "*.nupkg" -o -name "*.snupkg" \) -type f | wc -l)
 
-          echo "Found $PACKAGE_COUNT package(s) in output directory"
-          echo "Net8 package:  $NET8_PKG ✅"
-          echo "Net10 package: $NET10_PKG ✅"
+          echo "Found $PACKAGE_COUNT package file(s) in output directory"
+          echo "Main package: $MAIN_PKG ✅"
 
-          # Allow 2-4 packages (net8 main + net10 main + optional symbols for each)
-          if [ "$PACKAGE_COUNT" -lt 2 ] || [ "$PACKAGE_COUNT" -gt 4 ]; then
-            echo "Error: Expected 2-4 packages (net8 + net10 main + optional symbols), found $PACKAGE_COUNT"
+          # Allow 1-2 files (main package + optional symbols package)
+          if [ "$PACKAGE_COUNT" -lt 1 ] || [ "$PACKAGE_COUNT" -gt 2 ]; then
+            echo "Error: Expected 1-2 package files (main + optional symbols), found $PACKAGE_COUNT"
             exit 1
           fi
-          
+
           echo "✅ Package verification successful - no test packages found"
       
       - name: Upload NuGet artifacts

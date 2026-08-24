@@ -112,8 +112,8 @@ jobs:
         main_packages=$(find . -name "*.nupkg" -type f ! -name "*.symbols.nupkg")
         package_count=$(echo "$main_packages" | wc -l)
         
-        if [ "$package_count" -ne 2 ]; then
-          echo "Error: Expected exactly 2 main NuGet packages (net8 and net10), found $package_count"
+        if [ "$package_count" -ne 1 ]; then
+          echo "Error: Expected exactly 1 main NuGet package (single multi-target net8.0;net10.0), found $package_count"
           echo "Main packages found:"
           echo "$main_packages"
           exit 1
