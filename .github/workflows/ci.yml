@@ -276,7 +276,9 @@ jobs:
         run: mkdir -p ./artifacts
 
       - name: Publish application
-        run: dotnet publish --no-build --configuration Release --output ../publish/
+        # The project multi-targets net8.0;net10.0, so dotnet publish requires an
+        # explicit framework. Publish net10.0 to match the primary release version.
+        run: dotnet publish EnergyExemplar.EFCore.Duckdb.Extensions.csproj --no-build --configuration Release --framework net10.0 --output ../publish/
         working-directory: ./Source
 
       - name: Create version info file
