@@ -105,6 +105,10 @@ jobs:
     needs: [build-and-test, security-scan]
     # Only run release when PR is merged into main (push to main after PR merge)
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # GITHUB_TOKEN needs write access to push tags and create the GitHub Release.
+    # The repo default is read-only, which caused the tag push to fail with 403.
+    permissions:
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -139,8 +143,13 @@ jobs:
             NET10_VERSION="10.0.$((PATCH + 1))"
           fi
 
+          # Single version used for the GitHub Release tag, zip name and version file.
+          # Track the net10 line as the primary going-forward framework.
+          NEW_VERSION="$NET10_VERSION"
+
           echo "net8_version=$NET8_VERSION" >> $GITHUB_OUTPUT
           echo "net10_version=$NET10_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "Net8 version: $NET8_VERSION"
           echo "Net10 version: $NET10_VERSION"
 
