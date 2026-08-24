@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DuckDB.NET.Data" Version="1.5.2" />
+    <PackageReference Include="DuckDB.NET.Data" Version="1.5.5" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
@@ -48,7 +48,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.27" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite.Core" Version="8.0.27" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.27" />
-	  <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.2" />
+	  <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.5" />
     <PackageReference Include="SourceGear.sqlite3" Version="3.50.4.5" />
   </ItemGroup>
 
